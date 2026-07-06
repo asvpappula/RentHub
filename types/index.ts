@@ -106,6 +106,7 @@ export type NotificationType =
   | "rental_completed"
   | "message"
   | "dispute"
+  | "deposit_held"
   | "deposit_refunded"
   | "deposit_claimed";
 

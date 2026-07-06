@@ -80,8 +80,14 @@ export default function CheckoutPage({
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Deposit setup failed");
-        setClientSecret(data.clientSecret);
-        setStep("deposit");
+        if (data.held) {
+          // Deposit hold placed automatically with the same card.
+          toast("success", "Deposit hold placed — you're all set!");
+          setStep("done");
+        } else {
+          setClientSecret(data.clientSecret);
+          setStep("deposit");
+        }
       } else {
         setStep("done");
       }

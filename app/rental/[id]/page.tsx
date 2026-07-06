@@ -38,6 +38,7 @@ export default function RentalDetailPage({
 
   const [disputeOpen, setDisputeOpen] = useState<null | "damage" | "theft">(null);
   const [disputeText, setDisputeText] = useState("");
+  const [completeOpen, setCompleteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [myRating, setMyRating] = useState(0);
 
@@ -96,6 +97,37 @@ export default function RentalDetailPage({
       () => fetch(`/api/rentals/${rental.id}/complete`, { method: "POST" }),
       "Rental marked complete."
     );
+
+  /** Owner path: complete the rental AND release the deposit hold. */
+  const completeAndRelease = async () => {
+    setBusy(true);
+    try {
+      const completeRes = await fetch(`/api/rentals/${rental.id}/complete`, {
+        method: "POST",
+      });
+      const completeData = await completeRes.json();
+      if (!completeRes.ok) throw new Error(completeData.error ?? "Completion failed");
+
+      if (rental.deposit_status === "held") {
+        const refundRes = await fetch("/api/payments/refund-deposit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rental_id: rental.id }),
+        });
+        const refundData = await refundRes.json();
+        if (!refundRes.ok) throw new Error(refundData.error ?? "Deposit release failed");
+        toast("success", "Rental completed — deposit released to the renter.");
+      } else {
+        toast("success", "Rental completed.");
+      }
+      setCompleteOpen(false);
+      refetch();
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const refundDeposit = () =>
     act(
@@ -226,6 +258,17 @@ export default function RentalDetailPage({
                   label: "Completed",
                   done: rental.status === "completed",
                 },
+                ...(rental.deposit_amount > 0
+                  ? [
+                      {
+                        label:
+                          rental.deposit_status === "claimed"
+                            ? "Deposit claimed"
+                            : "Deposit released",
+                        done: ["refunded", "claimed"].includes(rental.deposit_status),
+                      },
+                    ]
+                  : []),
               ].map((s) => (
                 <li key={s.label} className="flex items-center gap-3 text-sm">
                   <span
@@ -249,9 +292,21 @@ export default function RentalDetailPage({
               Price breakdown
             </h2>
             <PriceBreakdown quote={quote} />
-            <p className="mt-3 text-xs">
-              Deposit status:{" "}
-              <span className="font-semibold text-slate-700">{rental.deposit_status}</span>
+            <p className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+              Deposit status:
+              <Badge
+                className={
+                  rental.deposit_status === "held"
+                    ? "bg-secondary-50 text-secondary-700 ring-secondary-200"
+                    : rental.deposit_status === "refunded"
+                      ? "bg-primary-50 text-primary-700 ring-primary-200"
+                      : rental.deposit_status === "claimed"
+                        ? "bg-rose-50 text-rose-700 ring-rose-200"
+                        : "bg-slate-100 text-slate-600 ring-slate-200"
+                }
+              >
+                {rental.deposit_status}
+              </Badge>
             </p>
           </div>
         </div>
@@ -299,7 +354,11 @@ export default function RentalDetailPage({
             )}
 
             {["confirmed", "active"].includes(rental.status) && (
-              <Button className="w-full" loading={busy} onClick={completeRental}>
+              <Button
+                className="w-full"
+                loading={busy && !completeOpen}
+                onClick={() => (isOwner ? setCompleteOpen(true) : completeRental())}
+              >
                 <FiCheckCircle className="h-4 w-4" />
                 Complete rental
               </Button>
@@ -387,6 +446,42 @@ export default function RentalDetailPage({
           )}
         </div>
       </div>
+
+      {/* Owner completion modal */}
+      <Modal
+        open={completeOpen}
+        onClose={() => setCompleteOpen(false)}
+        title="Complete this rental?"
+        size="sm"
+      >
+        <p className="text-sm text-slate-500">
+          Was &ldquo;{rental.item?.title}&rdquo; returned in good condition?
+        </p>
+        <div className="mt-5 space-y-2.5">
+          <Button className="w-full" loading={busy} onClick={completeAndRelease}>
+            <FiCheckCircle className="h-4 w-4" />
+            {rental.deposit_status === "held"
+              ? `Yes — complete & release ${formatMoney(rental.deposit_amount)} deposit`
+              : "Yes — complete rental"}
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full"
+            disabled={busy}
+            onClick={() => {
+              setCompleteOpen(false);
+              setDisputeOpen("damage");
+            }}
+          >
+            <FiAlertTriangle className="h-4 w-4 text-amber-500" />
+            No — report damage
+          </Button>
+        </div>
+        <p className="mt-3 text-xs text-slate-400">
+          Reporting damage opens a dispute; the deposit stays held until it&apos;s
+          resolved.
+        </p>
+      </Modal>
 
       {/* Dispute modal */}
       <Modal

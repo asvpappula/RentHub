@@ -32,9 +32,23 @@ export async function POST(request: Request) {
       (rental.daily_rate * rental.number_of_days + rental.insurance_fee) * 100;
 
     const stripe = getStripeServer();
+
+    // Attach the payment to a Stripe customer and save the card, so the
+    // deposit hold can be placed afterwards without re-entering details.
+    const existing = await stripe.customers.list({ email: user.email, limit: 1 });
+    const customer =
+      existing.data[0] ??
+      (await stripe.customers.create({
+        email: user.email,
+        name: user.name ?? undefined,
+        metadata: { renthub_user_id: String(user.id) },
+      }));
+
     const intent = await stripe.paymentIntents.create({
       amount: amountCents,
       currency: "usd",
+      customer: customer.id,
+      setup_future_usage: "off_session",
       automatic_payment_methods: { enabled: true },
       metadata: {
         rental_id: String(rental.id),

@@ -38,10 +38,22 @@ export async function POST(request: Request) {
     if (intent.metadata.kind === "deposit") {
       if (intent.status !== "requires_capture" && intent.status !== "succeeded")
         throw new ApiError(`Deposit not authorized (status: ${intent.status})`, 409);
-      await admin
+      const { data: updated } = await admin
         .from("rentals")
         .update({ deposit_status: "held" })
-        .eq("id", rentalId);
+        .eq("id", rentalId)
+        .neq("deposit_status", "held")
+        .select("id");
+      if (updated && updated.length > 0) {
+        await createNotification(
+          admin,
+          rental.renter_id,
+          "deposit_held",
+          "Deposit held in escrow",
+          `Your $${rental.deposit_amount} deposit for "${rental.item?.title}" is on hold — it's released when the rental completes without damage.`,
+          rentalId
+        );
+      }
       return NextResponse.json({ success: true, deposit_status: "held" });
     }
 
