@@ -8,6 +8,29 @@ import {
 } from "@/lib/api-helpers";
 import { createDisputeSchema } from "@/lib/validation";
 
+const DISPUTE_SELECT =
+  "*, reporter:users!disputes_reported_by_fkey(id, name, avatar_url), rental:rentals(id, renter_id, owner_id, deposit_amount, deposit_status, status, item:items(id, title))";
+
+/** GET /api/disputes — disputes on rentals where the user is a party. */
+export async function GET() {
+  try {
+    const { user, admin } = await requireUser();
+
+    const { data, error } = await admin
+      .from("disputes")
+      .select(DISPUTE_SELECT)
+      .order("created_at", { ascending: false });
+    if (error) throw new ApiError(error.message, 500);
+
+    const mine = (data ?? []).filter(
+      (d) => d.rental?.renter_id === user.id || d.rental?.owner_id === user.id
+    );
+    return NextResponse.json({ disputes: mine });
+  } catch (err) {
+    return handleApiError(err);
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const { user, admin } = await requireUser();
@@ -29,6 +52,7 @@ export async function POST(request: Request) {
         dispute_type: input.dispute_type,
         reported_by: user.id,
         description: input.description,
+        evidence_photos: input.evidence_photos ?? [],
       })
       .select()
       .single();

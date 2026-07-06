@@ -64,6 +64,7 @@ export const createDisputeSchema = z.object({
   rental_id: z.number().int().positive(),
   dispute_type: z.enum(["damage", "theft", "late_return", "other"]),
   description: z.string().min(10, "Describe what happened (10+ characters)").max(5000),
+  evidence_photos: z.array(z.url()).max(5).optional(),
 });
 
 export const paymentIntentSchema = z.object({

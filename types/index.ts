@@ -123,14 +123,27 @@ export interface AppNotification {
 
 export type DisputeType = "damage" | "theft" | "late_return" | "other";
 
+export type DisputeStatus =
+  | "pending"
+  | "under_review"
+  | "resolved"
+  | "appealed";
+
 export interface Dispute {
   id: number;
   rental_id: number;
   dispute_type: DisputeType;
   reported_by: number;
   description: string;
-  status: "pending" | "under_review" | "resolved" | "rejected";
+  status: DisputeStatus;
+  evidence_photos: string[];
+  response: string | null;
+  resolution_notes: string | null;
+  appeal_reason: string | null;
+  resolved_at: string | null;
   created_at: string;
+  reporter?: User;
+  rental?: Rental;
 }
 
 export interface Conversation {

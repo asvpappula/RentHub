@@ -99,6 +99,11 @@ CREATE TABLE disputes (
   reported_by BIGINT NOT NULL REFERENCES users(id),
   description TEXT NOT NULL,
   status VARCHAR(50) DEFAULT 'pending',
+  evidence_photos TEXT[] DEFAULT '{}',
+  response TEXT,
+  resolution_notes TEXT,
+  appeal_reason TEXT,
+  resolved_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW()
 );
 

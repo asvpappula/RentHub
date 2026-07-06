@@ -11,6 +11,8 @@ import {
   FiMessageSquare,
   FiCreditCard,
   FiUnlock,
+  FiX,
+  FiCamera,
 } from "react-icons/fi";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRentalUpdates } from "@/hooks/useRentalUpdates";
@@ -38,6 +40,7 @@ export default function RentalDetailPage({
 
   const [disputeOpen, setDisputeOpen] = useState<null | "damage" | "theft">(null);
   const [disputeText, setDisputeText] = useState("");
+  const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [completeOpen, setCompleteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [myRating, setMyRating] = useState(0);
@@ -147,6 +150,20 @@ export default function RentalDetailPage({
     }
     setBusy(true);
     try {
+      let evidenceUrls: string[] = [];
+      if (evidenceFiles.length > 0) {
+        const form = new FormData();
+        evidenceFiles.forEach((f) => form.append("files", f));
+        const uploadRes = await fetch("/api/disputes/evidence", {
+          method: "POST",
+          body: form,
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok)
+          throw new Error(uploadData.error ?? "Evidence upload failed");
+        evidenceUrls = uploadData.urls;
+      }
+
       const res = await fetch("/api/disputes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -154,14 +171,16 @@ export default function RentalDetailPage({
           rental_id: rental.id,
           dispute_type: disputeOpen,
           description: disputeText.trim(),
+          evidence_photos: evidenceUrls,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not file report");
-      toast("success", "Report filed. Our team will review it within 24h.");
+      toast("success", "Report filed with your evidence.");
       setDisputeOpen(null);
       setDisputeText("");
-      refetch();
+      setEvidenceFiles([]);
+      router.push(`/disputes/${data.dispute.id}`);
     } catch (err) {
       toast("error", err instanceof Error ? err.message : "Could not file report");
     } finally {
@@ -510,6 +529,51 @@ export default function RentalDetailPage({
             onChange={(e) => setDisputeText(e.target.value)}
             placeholder="What happened?"
           />
+        </div>
+        <div className="mt-4">
+          <p className="text-sm font-medium text-slate-700">
+            Evidence photos (up to 5)
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {evidenceFiles.map((f, i) => (
+              <div key={i} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={URL.createObjectURL(f)}
+                  alt={f.name}
+                  className="h-16 w-16 rounded-lg object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEvidenceFiles((prev) => prev.filter((_, j) => j !== i))
+                  }
+                  className="absolute -right-1.5 -top-1.5 rounded-full bg-slate-900/80 p-1 text-white"
+                  aria-label="Remove photo"
+                >
+                  <FiX className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+            {evidenceFiles.length < 5 && (
+              <label className="flex h-16 w-16 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-slate-400 hover:border-primary-300 hover:text-primary-500">
+                <FiCamera className="h-5 w-5" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    const list = e.target.files;
+                    if (list)
+                      setEvidenceFiles((prev) =>
+                        [...prev, ...Array.from(list)].slice(0, 5)
+                      );
+                  }}
+                />
+              </label>
+            )}
+          </div>
         </div>
       </Modal>
     </div>

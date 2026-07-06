@@ -14,7 +14,9 @@ const updateSchema = z.object({
 async function getAuthorizedDispute(id: number, userId: number, admin: Awaited<ReturnType<typeof requireUser>>["admin"]) {
   const { data: dispute } = await admin
     .from("disputes")
-    .select("*, rental:rentals(renter_id, owner_id, item:items(title))")
+    .select(
+      "*, reporter:users!disputes_reported_by_fkey(id, name, avatar_url), rental:rentals(*, item:items(id, title, photos:item_photos(*)), renter:users!rentals_renter_id_fkey(id, name, avatar_url), owner:users!rentals_owner_id_fkey(id, name, avatar_url))"
+    )
     .eq("id", id)
     .single();
   if (!dispute) throw new ApiError("Dispute not found", 404);
