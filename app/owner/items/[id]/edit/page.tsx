@@ -3,8 +3,8 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FiTrash2 } from "react-icons/fi";
-import type { Item } from "@/types";
+import { FiTrash2, FiStar, FiUploadCloud, FiX } from "react-icons/fi";
+import type { Item, ItemPhoto } from "@/types";
 import { CATEGORIES } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
@@ -24,10 +24,13 @@ export default function EditItemPage({
   const { toast } = useToast();
 
   const [item, setItem] = useState<Item | null>(null);
+  const [photos, setPhotos] = useState<ItemPhoto[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState<number | null>(null);
 
   const [form, setForm] = useState({
     category: "",
@@ -47,6 +50,7 @@ export default function EditItemPage({
       .then((data) => {
         const it: Item | null = data.item ?? null;
         setItem(it);
+        setPhotos(it?.photos ?? []);
         if (it) {
           setForm({
             category: it.category,
@@ -66,6 +70,72 @@ export default function EditItemPage({
 
   const set = (key: string, value: string | boolean) =>
     setForm((f) => ({ ...f, [key]: value }));
+
+  const addPhotos = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      [...files].forEach((f) => form.append("files", f));
+      form.append("photo_type", photos.length === 0 ? "main" : "gallery");
+      const res = await fetch(`/api/items/${id}/photos`, {
+        method: "POST",
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Upload failed");
+      setPhotos((prev) => [...prev, ...data.photos]);
+      toast("success", `${data.photos.length} photo${data.photos.length === 1 ? "" : "s"} uploaded.`);
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const deletePhoto = async (photoId: number) => {
+    setPhotoBusy(photoId);
+    try {
+      const res = await fetch(`/api/items/${id}/photos/${photoId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Delete failed");
+      setPhotos((prev) => prev.filter((p) => p.id !== photoId));
+      toast("success", "Photo deleted.");
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setPhotoBusy(null);
+    }
+  };
+
+  const setMainPhoto = async (photoId: number) => {
+    setPhotoBusy(photoId);
+    try {
+      const res = await fetch(`/api/items/${id}/photos/${photoId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photo_type: "main" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Update failed");
+      setPhotos((prev) =>
+        prev.map((p) =>
+          p.id === photoId
+            ? { ...p, photo_type: "main" }
+            : p.photo_type === "main"
+              ? { ...p, photo_type: "gallery" }
+              : p
+        )
+      );
+      toast("success", "Main photo updated.");
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Update failed");
+    } finally {
+      setPhotoBusy(null);
+    }
+  };
 
   const save = async () => {
     setSaving(true);
@@ -143,6 +213,79 @@ export default function EditItemPage({
           <FiTrash2 className="h-4 w-4" />
           Delete
         </Button>
+      </div>
+
+      {/* Photos */}
+      <div className="mt-6 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm sm:p-8">
+        <h2 className="text-sm font-semibold text-slate-700">
+          Photos ({photos.length}/10)
+        </h2>
+        <div className="mt-3 flex flex-wrap gap-3">
+          {photos.map((photo) => (
+            <div key={photo.id} className="group relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={photo.photo_url}
+                alt="Item photo"
+                className={
+                  "h-24 w-24 rounded-xl object-cover ring-2 " +
+                  (photo.photo_type === "main"
+                    ? "ring-primary-500"
+                    : "ring-transparent")
+                }
+              />
+              {photo.photo_type === "main" && (
+                <span className="absolute left-1 top-1 rounded-full bg-primary-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                  MAIN
+                </span>
+              )}
+              <div className="absolute inset-x-1 bottom-1 flex justify-between opacity-0 transition group-hover:opacity-100">
+                {photo.photo_type !== "main" ? (
+                  <button
+                    type="button"
+                    disabled={photoBusy === photo.id}
+                    onClick={() => setMainPhoto(photo.id)}
+                    title="Set as main photo"
+                    className="rounded-full bg-slate-900/70 p-1.5 text-white hover:bg-primary-600"
+                  >
+                    <FiStar className="h-3 w-3" />
+                  </button>
+                ) : (
+                  <span />
+                )}
+                <button
+                  type="button"
+                  disabled={photoBusy === photo.id}
+                  onClick={() => deletePhoto(photo.id)}
+                  title="Delete photo"
+                  className="rounded-full bg-slate-900/70 p-1.5 text-white hover:bg-rose-600"
+                >
+                  <FiX className="h-3 w-3" />
+                </button>
+              </div>
+            </div>
+          ))}
+          {photos.length < 10 && (
+            <label className="flex h-24 w-24 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-slate-200 text-slate-400 transition hover:border-primary-300 hover:text-primary-500">
+              {uploading ? (
+                <span className="h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : (
+                <>
+                  <FiUploadCloud className="h-5 w-5" />
+                  <span className="text-[10px] font-medium">Add</span>
+                </>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                disabled={uploading}
+                onChange={(e) => addPhotos(e.target.files)}
+              />
+            </label>
+          )}
+        </div>
       </div>
 
       <div className="mt-6 space-y-5 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm sm:p-8">

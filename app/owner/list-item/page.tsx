@@ -46,9 +46,19 @@ export default function ListItemPage() {
     },
   });
 
-  const addFiles = (list: FileList | null) => {
+  const [dragging, setDragging] = useState(false);
+
+  const addFiles = (list: FileList | DataTransferItemList | File[] | null) => {
     if (!list) return;
-    setFiles((prev) => [...prev, ...Array.from(list)].slice(0, 8));
+    const incoming =
+      list instanceof DataTransferItemList
+        ? [...list].map((i) => i.getAsFile()).filter((f): f is File => !!f)
+        : [...list];
+    const images = incoming.filter((f) => f.type.startsWith("image/"));
+    if (images.length < incoming.length) {
+      toast("warning", "Only image files can be uploaded.");
+    }
+    setFiles((prev) => [...prev, ...images].slice(0, 10));
   };
 
   const onSubmit = async (values: FormValues) => {
@@ -125,14 +135,33 @@ export default function ListItemPage() {
 
         {/* Photos */}
         <FieldWrapper
-          label="Photos (up to 8)"
+          label="Photos (up to 10)"
           hint="Clear, well-lit photos rent 3× faster."
         >
           <div>
-            <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/60 px-6 py-8 text-center transition hover:border-primary-300 hover:bg-primary-50/30">
+            <label
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragging(true);
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragging(false);
+                addFiles(e.dataTransfer.files);
+              }}
+              className={
+                "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-6 py-8 text-center transition " +
+                (dragging
+                  ? "border-primary-500 bg-primary-50/60"
+                  : "border-slate-200 bg-slate-50/60 hover:border-primary-300 hover:bg-primary-50/30")
+              }
+            >
               <FiUploadCloud className="h-7 w-7 text-slate-400" />
               <span className="text-sm text-slate-500">
-                Click to upload images
+                {dragging
+                  ? "Drop images to add them"
+                  : "Click to upload, or drag & drop images"}
               </span>
               <input
                 type="file"

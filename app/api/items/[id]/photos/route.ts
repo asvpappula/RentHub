@@ -44,6 +44,13 @@ export async function POST(
     const photoType = (form.get("photo_type") as string) || "main";
     if (files.length === 0) throw new ApiError("No files provided", 400);
 
+    const { count: existingCount } = await admin
+      .from("item_photos")
+      .select("id", { count: "exact", head: true })
+      .eq("item_id", itemId);
+    if ((existingCount ?? 0) + files.length > 10)
+      throw new ApiError("Maximum 10 photos per item", 400);
+
     const bucket = photoType === "condition" ? "condition-photos" : "item-photos";
     const created = [];
 

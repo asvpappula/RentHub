@@ -140,7 +140,9 @@ export default function ItemDetailPage({
     );
   }
 
-  const photos = item.photos ?? [];
+  const photos = [...(item.photos ?? [])].sort((a, b) =>
+    a.photo_type === "main" ? -1 : b.photo_type === "main" ? 1 : 0
+  );
   const photo = photos[photoIndex];
   const isOwner = user?.id === item.owner_id;
 
@@ -158,8 +160,17 @@ export default function ItemDetailPage({
                 className="h-full w-full object-cover"
               />
             ) : (
-              <div className="flex h-full items-center justify-center text-slate-300">
+              <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-300">
                 <FiImage className="h-16 w-16" />
+                <span className="text-sm text-slate-400">No photos yet</span>
+                {isOwner && (
+                  <Link
+                    href={`/owner/items/${item.id}/edit`}
+                    className="text-sm font-semibold text-primary-600 hover:underline"
+                  >
+                    Add photos
+                  </Link>
+                )}
               </div>
             )}
             {photos.length > 0 && (
@@ -200,6 +211,31 @@ export default function ItemDetailPage({
               </>
             )}
           </div>
+
+          {/* Thumbnail strip */}
+          {photos.length > 1 && (
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+              {photos.map((p, i) => (
+                <button
+                  key={p.id}
+                  onClick={() => setPhotoIndex(i)}
+                  className={`h-16 w-16 shrink-0 overflow-hidden rounded-lg ring-2 transition ${
+                    i === photoIndex
+                      ? "ring-primary-500"
+                      : "ring-transparent opacity-70 hover:opacity-100"
+                  }`}
+                  aria-label={`Show photo ${i + 1}`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={p.photo_url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="mt-6">
             <div className="flex flex-wrap items-center gap-2">
