@@ -12,6 +12,7 @@ import {
   FiStar,
   FiCheck,
   FiX,
+  FiEdit2,
 } from "react-icons/fi";
 import { isAfter, parseISO, startOfMonth, startOfYear } from "date-fns";
 import type { Item, Rental } from "@/types";
@@ -57,8 +58,12 @@ export default function OwnerDashboard() {
   const earningRentals = rentals.filter((r) =>
     ["confirmed", "active", "completed"].includes(r.status)
   );
+  // Owner earns the rental rate net of the 15% platform commission
+  // (insurance fee and deposit are not owner revenue).
   const earningsOf = (list: Rental[]) =>
-    list.reduce((sum, r) => sum + (r.total_cost - r.deposit_amount), 0);
+    Math.round(
+      list.reduce((sum, r) => sum + r.daily_rate * r.number_of_days * 0.85, 0)
+    );
   const totalEarnings = earningsOf(earningRentals);
   const monthEarnings = earningsOf(
     earningRentals.filter((r) => isAfter(parseISO(r.created_at), startOfMonth(new Date())))
@@ -87,8 +92,18 @@ export default function OwnerDashboard() {
     }
   };
 
+  const totalViews = items.reduce((sum, i) => sum + (i.view_count ?? 0), 0);
+  const totalItemRentals = items.reduce((sum, i) => sum + (i.rental_count ?? 0), 0);
+  const mostPopular = [...items].sort(
+    (a, b) => b.rental_count - a.rental_count || b.view_count - a.view_count
+  )[0];
+
   const stats = [
-    { icon: FiDollarSign, label: "Total earned", value: formatMoney(totalEarnings) },
+    {
+      icon: FiDollarSign,
+      label: "Total earned (after 15% fee)",
+      value: formatMoney(totalEarnings),
+    },
     { icon: FiClock, label: "This month", value: formatMoney(monthEarnings) },
     { icon: FiArchive, label: "This year", value: formatMoney(yearEarnings) },
     { icon: FiPackage, label: "Items listed", value: String(items.length) },
@@ -128,6 +143,28 @@ export default function OwnerDashboard() {
             <p className="text-xs text-slate-500">{s.label}</p>
           </div>
         ))}
+      </div>
+
+      {/* Analytics */}
+      <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-2xl bg-slate-50 px-5 py-3 text-sm text-slate-600">
+        <span>
+          <span className="font-semibold text-slate-900">{totalViews}</span> total views
+        </span>
+        <span>
+          <span className="font-semibold text-slate-900">{totalItemRentals}</span> completed rentals
+        </span>
+        {mostPopular && (
+          <span>
+            Most popular:{" "}
+            <Link
+              href={`/item/${mostPopular.id}`}
+              className="font-semibold text-primary-700 hover:underline"
+            >
+              {mostPopular.title}
+            </Link>{" "}
+            ({mostPopular.rental_count} rentals · {mostPopular.view_count} views)
+          </span>
+        )}
       </div>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-3">
@@ -259,33 +296,38 @@ export default function OwnerDashboard() {
               />
             ) : (
               items.map((item) => (
-                <Link
+                <div
                   key={item.id}
-                  href={`/item/${item.id}`}
                   className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm transition hover:border-primary-200"
                 >
-                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-100">
-                    {item.photos?.[0] ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={item.photos[0].photo_url}
-                        alt={item.title}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-slate-300">
-                        <FiPackage className="h-5 w-5" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="line-clamp-1 text-sm font-medium text-slate-900">
-                      {item.title}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {formatMoney(item.daily_rate)}/day · {item.rental_count} rentals
-                    </p>
-                  </div>
+                  <Link
+                    href={`/item/${item.id}`}
+                    className="flex min-w-0 flex-1 items-center gap-3"
+                  >
+                    <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-100">
+                      {item.photos?.[0] ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={item.photos[0].photo_url}
+                          alt={item.title}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-slate-300">
+                          <FiPackage className="h-5 w-5" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="line-clamp-1 text-sm font-medium text-slate-900">
+                        {item.title}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {formatMoney(item.daily_rate)}/day · {item.rental_count} rentals ·{" "}
+                        {item.view_count} views
+                      </p>
+                    </div>
+                  </Link>
                   <span
                     className={`h-2 w-2 shrink-0 rounded-full ${
                       item.availability_status === "available"
@@ -294,7 +336,14 @@ export default function OwnerDashboard() {
                     }`}
                     title={item.availability_status}
                   />
-                </Link>
+                  <Link
+                    href={`/owner/items/${item.id}/edit`}
+                    className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-50 hover:text-primary-600"
+                    aria-label={`Edit ${item.title}`}
+                  >
+                    <FiEdit2 className="h-4 w-4" />
+                  </Link>
+                </div>
               ))
             )}
           </div>
