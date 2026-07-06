@@ -67,6 +67,28 @@ export async function POST(request: Request) {
         });
       } catch (err) {
         console.error("[twilio]", err);
+        const twilioCode = (err as { code?: number }).code;
+        if (twilioCode === 21211)
+          throw new ApiError("That phone number doesn't look valid — double-check it.", 400);
+        if (twilioCode === 21608 || twilioCode === 572002)
+          throw new ApiError(
+            "This Twilio trial account can only text verified numbers. Add your number under Verified Caller IDs in the Twilio console, or upgrade the account.",
+            400
+          );
+        if (twilioCode === 572006) {
+          // Trial accounts can't send custom SMS bodies at all — fall back
+          // to dev mode so verification still works until the account is
+          // upgraded (Twilio Console -> Billing).
+          console.log(
+            `[phone-verification] Twilio trial template restriction — dev-mode code for ${phone_number}: ${code}`
+          );
+          return NextResponse.json({
+            success: true,
+            message:
+              "Twilio trial accounts can't send custom SMS — code shown on screen. Upgrade the Twilio account to enable real texts.",
+            devCode: code,
+          });
+        }
         throw new ApiError("Could not send SMS — check the number and try again", 500);
       }
       return NextResponse.json({ success: true, message: "Code sent to your phone" });
