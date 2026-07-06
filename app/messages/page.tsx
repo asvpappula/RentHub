@@ -30,8 +30,14 @@ function MessagesContent() {
   const [activeUser, setActiveUser] = useState<User | null>(null);
   const [draft, setDraft] = useState("");
 
-  const { messages, loading: loadingMessages, sending, sendMessage } =
-    useMessages(activeUserId);
+  const {
+    messages,
+    loading: loadingMessages,
+    sending,
+    sendMessage,
+    otherTyping,
+    notifyTyping,
+  } = useMessages(activeUserId);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const loadConversations = useCallback(() => {
@@ -170,9 +176,14 @@ function MessagesContent() {
                   name={activeUser?.name}
                   size="sm"
                 />
-                <p className="font-semibold text-slate-900">
-                  {activeUser?.name ?? "…"}
-                </p>
+                <div>
+                  <p className="font-semibold text-slate-900">
+                    {activeUser?.name ?? "…"}
+                  </p>
+                  {otherTyping && (
+                    <p className="text-xs font-medium text-primary-600">typing…</p>
+                  )}
+                </div>
               </div>
 
               <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
@@ -210,7 +221,14 @@ function MessagesContent() {
                             )}
                           >
                             {formatDateTime(m.created_at)}
-                            {mine && m.read_at && " · Read"}
+                            {mine && (
+                              <span
+                                title={m.read_at ? "Read" : "Sent"}
+                                className={cn("ml-1", m.read_at && "font-bold")}
+                              >
+                                {m.read_at ? "✓✓" : "✓"}
+                              </span>
+                            )}
                           </p>
                         </div>
                       </div>
@@ -226,7 +244,10 @@ function MessagesContent() {
               >
                 <input
                   value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
+                  onChange={(e) => {
+                    setDraft(e.target.value);
+                    notifyTyping();
+                  }}
                   placeholder="Type a message…"
                   className="h-11 flex-1 rounded-full border border-slate-200 bg-slate-50 px-4 text-sm focus:border-primary-500 focus:bg-white focus:outline-none"
                 />

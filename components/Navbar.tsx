@@ -15,14 +15,17 @@ import {
 } from "react-icons/fi";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import Avatar from "@/components/ui/Avatar";
 import Button from "@/components/ui/Button";
-import { cn } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
 
 export default function Navbar() {
   const { user, loading, signOut } = useAuth();
-  const { unreadCount } = useNotifications();
+  const { notifications, unreadCount, markAsRead } = useNotifications();
+  const unreadMessages = useUnreadMessages();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
   const [search, setSearch] = useState("");
   const router = useRouter();
   const pathname = usePathname();
@@ -82,19 +85,79 @@ export default function Navbar() {
                 aria-label="Messages"
               >
                 <FiMessageSquare className="h-5 w-5" />
-              </Link>
-              <Link
-                href="/dashboard"
-                className="relative rounded-lg p-2.5 text-slate-500 hover:bg-slate-50"
-                aria-label="Notifications"
-              >
-                <FiBell className="h-5 w-5" />
-                {unreadCount > 0 && (
-                  <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
-                    {unreadCount > 9 ? "9+" : unreadCount}
+                {unreadMessages > 0 && (
+                  <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary-500 px-1 text-[10px] font-bold text-white">
+                    {unreadMessages > 9 ? "9+" : unreadMessages}
                   </span>
                 )}
               </Link>
+              <div className="relative">
+                <button
+                  onClick={() => setNotifOpen((v) => !v)}
+                  className="relative rounded-lg p-2.5 text-slate-500 hover:bg-slate-50"
+                  aria-label="Notifications"
+                >
+                  <FiBell className="h-5 w-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </button>
+                {notifOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setNotifOpen(false)}
+                    />
+                    <div className="absolute right-0 z-20 mt-2 w-80 animate-fade-in-up rounded-xl border border-slate-100 bg-white py-2 shadow-lg">
+                      <p className="border-b border-slate-50 px-4 py-2 text-sm font-semibold text-slate-900">
+                        Notifications
+                      </p>
+                      {notifications.length === 0 ? (
+                        <p className="px-4 py-6 text-center text-sm text-slate-400">
+                          You&apos;re all caught up.
+                        </p>
+                      ) : (
+                        notifications.slice(0, 5).map((n) => (
+                          <button
+                            key={n.id}
+                            onClick={() => {
+                              if (!n.read_at) markAsRead(n.id);
+                              setNotifOpen(false);
+                              if (n.related_rental_id)
+                                router.push(`/rental/${n.related_rental_id}`);
+                            }}
+                            className={cn(
+                              "block w-full px-4 py-2.5 text-left hover:bg-slate-50",
+                              !n.read_at && "bg-primary-50/50"
+                            )}
+                          >
+                            <p className="text-sm font-medium text-slate-900">
+                              {n.title}
+                            </p>
+                            {n.message && (
+                              <p className="line-clamp-1 text-xs text-slate-500">
+                                {n.message}
+                              </p>
+                            )}
+                            <p className="mt-0.5 text-[10px] text-slate-400">
+                              {formatDateTime(n.created_at)}
+                            </p>
+                          </button>
+                        ))
+                      )}
+                      <Link
+                        href="/dashboard"
+                        onClick={() => setNotifOpen(false)}
+                        className="block border-t border-slate-50 px-4 py-2 text-center text-xs font-semibold text-primary-600 hover:underline"
+                      >
+                        View all in dashboard
+                      </Link>
+                    </div>
+                  </>
+                )}
+              </div>
 
               <div className="relative">
                 <button
