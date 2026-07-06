@@ -47,7 +47,12 @@ export const createRentalSchema = z
   .refine((v) => v.end_date > v.start_date, {
     message: "End date must be after start date",
     path: ["end_date"],
-  });
+  })
+  .refine(
+    // Compare in UTC with a 1-day grace so no timezone blocks a same-day start.
+    (v) => v.start_date >= new Date(Date.now() - 86_400_000).toISOString().slice(0, 10),
+    { message: "Start date cannot be in the past", path: ["start_date"] }
+  );
 
 export const sendMessageSchema = z.object({
   recipient_id: z.number().int().positive(),

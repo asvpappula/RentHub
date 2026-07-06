@@ -81,7 +81,7 @@ export default function ItemDetailPage({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Request failed");
       toast("success", "Request sent! The owner will review it shortly.");
-      router.push(`/rental/${data.rental.id}`);
+      router.push(`/checkout/${data.rental.id}`);
     } catch (err) {
       toast("error", err instanceof Error ? err.message : "Request failed");
       setRequesting(false);
