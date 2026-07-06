@@ -115,6 +115,18 @@ CREATE TABLE saved_items (
   UNIQUE (user_id, item_id)
 );
 
+-- Service-role only (RLS enabled with no policies).
+CREATE TABLE phone_verification_codes (
+  id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  phone_number VARCHAR(20) NOT NULL,
+  code_hash VARCHAR(64) NOT NULL,
+  attempts INT DEFAULT 0,
+  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+ALTER TABLE phone_verification_codes ENABLE ROW LEVEL SECURITY;
+
 CREATE TABLE fraud_flags (
   id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   user_id BIGINT NOT NULL REFERENCES users(id),
@@ -126,6 +138,7 @@ CREATE TABLE fraud_flags (
 
 CREATE INDEX idx_users_auth ON users(auth_id);
 CREATE INDEX idx_saved_items_user ON saved_items(user_id);
+CREATE INDEX idx_phone_codes_user ON phone_verification_codes(user_id);
 CREATE INDEX idx_items_owner ON items(owner_id);
 CREATE INDEX idx_items_category ON items(category);
 CREATE INDEX idx_rentals_renter ON rentals(renter_id);
