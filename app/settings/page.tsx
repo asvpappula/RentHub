@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   FiCheckCircle,
   FiXCircle,
@@ -192,9 +193,16 @@ export default function SettingsPage() {
             </li>
           ))}
         </ul>
+        {!user.phone_verified && (
+          <Link href="/settings/verify-phone" className="mt-4 inline-block">
+            <Button size="sm" variant="secondary">
+              Verify phone number (+25 trust)
+            </Button>
+          </Link>
+        )}
         <p className="mt-3 text-xs text-slate-400">
-          Phone, ID, and background verification are coming soon (Twilio, Stripe
-          Identity, and Checkr integrations).
+          ID and background verification are coming soon (Stripe Identity and
+          Checkr integrations).
         </p>
       </section>
 

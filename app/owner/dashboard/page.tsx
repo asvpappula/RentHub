@@ -196,6 +196,21 @@ export default function OwnerDashboard() {
         ))}
       </div>
 
+      {/* Verification nudge */}
+      {user && !user.phone_verified && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-secondary-200 bg-secondary-50/60 px-5 py-3">
+          <p className="text-sm text-secondary-800">
+            <span className="font-semibold">Boost your trust score:</span>{" "}
+            verified owners get more bookings.
+          </p>
+          <Link href="/settings/verify-phone">
+            <Button size="sm" variant="secondary">
+              Verify phone (+25 trust)
+            </Button>
+          </Link>
+        </div>
+      )}
+
       {/* Analytics */}
       <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-2xl bg-slate-50 px-5 py-3 text-sm text-slate-600">
         <span>
