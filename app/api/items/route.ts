@@ -8,7 +8,8 @@ import {
 import { createItemSchema } from "@/lib/validation";
 import { createSupabaseAdminClient } from "@/lib/supabase-server";
 
-const PAGE_SIZE = 12;
+const DEFAULT_PAGE_SIZE = 12;
+const MAX_PAGE_SIZE = 50;
 
 export async function GET(request: Request) {
   try {
@@ -20,6 +21,10 @@ export async function GET(request: Request) {
     const ownerId = searchParams.get("ownerId");
     const sort = searchParams.get("sort") ?? "newest";
     const page = Math.max(1, Number(searchParams.get("page") ?? 1));
+    const pageSize = Math.min(
+      MAX_PAGE_SIZE,
+      Math.max(1, Number(searchParams.get("limit") ?? DEFAULT_PAGE_SIZE))
+    );
 
     const admin = createSupabaseAdminClient();
     let query = admin
@@ -41,16 +46,27 @@ export async function GET(request: Request) {
     else if (sort === "rating") query = query.order("average_rating", { ascending: false, nullsFirst: false });
     else query = query.order("created_at", { ascending: false });
 
-    const from = (page - 1) * PAGE_SIZE;
-    const { data, count, error } = await query.range(from, from + PAGE_SIZE - 1);
+    const from = (page - 1) * pageSize;
+    const { data, count, error } = await query.range(from, from + pageSize - 1);
+
+    // A page past the last one is an empty page, not an error (PGRST103).
+    if (error && error.code === "PGRST103") {
+      return NextResponse.json({
+        items: [],
+        total: 0,
+        page,
+        pageSize,
+        totalPages: 1,
+      });
+    }
     if (error) throw new ApiError(error.message, 500);
 
     return NextResponse.json({
       items: data ?? [],
       total: count ?? 0,
       page,
-      pageSize: PAGE_SIZE,
-      totalPages: Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE)),
+      pageSize,
+      totalPages: Math.max(1, Math.ceil((count ?? 0) / pageSize)),
     });
   } catch (err) {
     return handleApiError(err);

@@ -43,6 +43,13 @@ function BrowseContent() {
     [router, searchParams]
   );
 
+  // Live search: apply the query ~450ms after the user stops typing.
+  useEffect(() => {
+    if (searchInput === search) return;
+    const t = setTimeout(() => setParam({ search: searchInput || null }), 450);
+    return () => clearTimeout(t);
+  }, [searchInput, search, setParam]);
+
   useEffect(() => {
     setLoading(true);
     const params = new URLSearchParams();
