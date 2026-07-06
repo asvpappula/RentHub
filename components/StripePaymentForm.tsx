@@ -22,11 +22,13 @@ function InnerForm({ label, onSuccess }: Omit<StripePaymentFormProps, "clientSec
   const elements = useElements();
   const { toast } = useToast();
   const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!stripe || !elements) return;
     setSubmitting(true);
+    setErrorMessage(null);
 
     const { error, paymentIntent } = await stripe.confirmPayment({
       elements,
@@ -34,7 +36,9 @@ function InnerForm({ label, onSuccess }: Omit<StripePaymentFormProps, "clientSec
     });
 
     if (error) {
-      toast("error", error.message ?? "Payment failed. Please try again.");
+      const message = error.message ?? "Payment failed. Please try again.";
+      setErrorMessage(message);
+      toast("error", message);
       setSubmitting(false);
       return;
     }
@@ -46,7 +50,9 @@ function InnerForm({ label, onSuccess }: Omit<StripePaymentFormProps, "clientSec
     ) {
       onSuccess(paymentIntent.id);
     } else {
-      toast("warning", `Payment status: ${paymentIntent?.status ?? "unknown"}`);
+      const message = `Payment not completed (status: ${paymentIntent?.status ?? "unknown"}). Please try again.`;
+      setErrorMessage(message);
+      toast("warning", message);
       setSubmitting(false);
     }
   };
@@ -54,8 +60,13 @@ function InnerForm({ label, onSuccess }: Omit<StripePaymentFormProps, "clientSec
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <PaymentElement />
+      {errorMessage && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          {errorMessage}
+        </div>
+      )}
       <Button type="submit" loading={submitting} disabled={!stripe} className="w-full">
-        {label}
+        {submitting ? "Processing payment…" : label}
       </Button>
     </form>
   );

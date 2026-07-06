@@ -28,6 +28,7 @@ export default function CheckoutPage({
   const [agreed, setAgreed] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   useEffect(() => {
     if (rental?.status === "confirmed" && rental.deposit_status === "held") {
@@ -37,18 +38,26 @@ export default function CheckoutPage({
 
   const startPayment = async () => {
     setPreparing(true);
+    setPaymentError(null);
     try {
       const res = await fetch("/api/payments/create-intent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rental_id: Number(rentalId) }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Could not start payment");
       setClientSecret(data.clientSecret);
       setStep("payment");
     } catch (err) {
-      toast("error", err instanceof Error ? err.message : "Payment setup failed");
+      const message =
+        err instanceof TypeError
+          ? "Network error — check your connection and try again."
+          : err instanceof Error
+            ? err.message
+            : "Payment setup failed";
+      setPaymentError(message);
+      toast("error", message);
     } finally {
       setPreparing(false);
     }
@@ -201,6 +210,11 @@ export default function CheckoutPage({
               deposit &amp; insurance policy.
             </span>
           </label>
+          {paymentError && (
+            <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+              {paymentError}
+            </div>
+          )}
           <Button
             className="mt-5 w-full"
             size="lg"
@@ -208,7 +222,7 @@ export default function CheckoutPage({
             loading={preparing}
             onClick={startPayment}
           >
-            Continue to payment
+            {paymentError ? "Try again" : "Continue to payment"}
           </Button>
         </div>
       )}
