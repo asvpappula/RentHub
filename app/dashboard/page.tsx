@@ -11,28 +11,77 @@ import {
   FiDollarSign,
   FiStar,
   FiTrash2,
+  FiHeart,
+  FiX,
 } from "react-icons/fi";
-import type { Rental } from "@/types";
+import type { Item, Rental } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useToast } from "@/components/ui/Toast";
 import { formatMoney, formatDateTime, cn } from "@/lib/utils";
 import RentalCard from "@/components/RentalCard";
+import ItemCard from "@/components/ItemCard";
 import EmptyState from "@/components/EmptyState";
 import Button from "@/components/ui/Button";
+import Modal from "@/components/ui/Modal";
 import Skeleton from "@/components/ui/Skeleton";
+import RatingStars from "@/components/RatingStars";
+import Avatar from "@/components/ui/Avatar";
+
+interface SavedEntry {
+  id: number;
+  item: Item | null;
+}
 
 export default function RenterDashboard() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const { notifications, markAsRead, deleteNotification } = useNotifications();
   const [rentals, setRentals] = useState<Rental[]>([]);
+  const [savedItems, setSavedItems] = useState<SavedEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [rating, setRating] = useState<Rental | null>(null);
+  const [ratingBusy, setRatingBusy] = useState(false);
 
   useEffect(() => {
-    fetch("/api/rentals?role=renter")
-      .then((r) => r.json())
-      .then((data) => setRentals(data.rentals ?? []))
+    Promise.all([
+      fetch("/api/rentals?role=renter").then((r) => r.json()),
+      fetch("/api/saved-items").then((r) => r.json()),
+    ])
+      .then(([rentalData, savedData]) => {
+        setRentals(rentalData.rentals ?? []);
+        setSavedItems(savedData.saved ?? []);
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  const removeSaved = async (itemId: number) => {
+    setSavedItems((prev) => prev.filter((s) => s.item?.id !== itemId));
+    await fetch(`/api/saved-items/${itemId}`, { method: "DELETE" });
+  };
+
+  const submitRating = async (value: number) => {
+    if (!rating) return;
+    setRatingBusy(true);
+    try {
+      const res = await fetch(`/api/rentals/${rating.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ owner_rating: value }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Rating failed");
+      setRentals((prev) =>
+        prev.map((r) => (r.id === rating.id ? { ...r, owner_rating: value } : r))
+      );
+      toast("success", "Thanks for rating!");
+      setRating(null);
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Rating failed");
+    } finally {
+      setRatingBusy(false);
+    }
+  };
 
   const active = rentals.filter((r) => ["confirmed", "active"].includes(r.status));
   const upcoming = rentals.filter((r) => ["pending", "approved"].includes(r.status));
@@ -94,6 +143,11 @@ export default function RenterDashboard() {
           <section>
             <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
               <FiClock className="h-5 w-5 text-primary-600" /> Active rentals
+              {active.length > 0 && (
+                <span className="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-bold text-primary-700">
+                  {active.length}
+                </span>
+              )}
             </h2>
             <div className="mt-3 space-y-3">
               {loading ? (
@@ -121,6 +175,11 @@ export default function RenterDashboard() {
           <section>
             <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
               <FiCalendar className="h-5 w-5 text-secondary-600" /> Upcoming & pending
+              {upcoming.length > 0 && (
+                <span className="rounded-full bg-secondary-100 px-2 py-0.5 text-xs font-bold text-secondary-700">
+                  {upcoming.length}
+                </span>
+              )}
             </h2>
             <div className="mt-3 space-y-3">
               {loading ? (
@@ -147,8 +206,57 @@ export default function RenterDashboard() {
                 <p className="text-sm text-slate-400">Your rental history will appear here.</p>
               ) : (
                 past.slice(0, 5).map((r) => (
-                  <RentalCard key={r.id} rental={r} perspective="renter" />
+                  <div key={r.id}>
+                    <RentalCard rental={r} perspective="renter" />
+                    {r.status === "completed" && r.owner_rating == null && (
+                      <button
+                        onClick={() => setRating(r)}
+                        className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 hover:underline"
+                      >
+                        <FiStar className="h-3.5 w-3.5" /> Rate the owner
+                      </button>
+                    )}
+                  </div>
                 ))
+              )}
+            </div>
+          </section>
+
+          {/* Saved items */}
+          <section>
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
+              <FiHeart className="h-5 w-5 text-rose-500" /> Saved items
+              {savedItems.length > 0 && (
+                <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-700">
+                  {savedItems.length}
+                </span>
+              )}
+            </h2>
+            <div className="mt-3">
+              {loading ? (
+                <Skeleton className="h-40 w-full rounded-2xl" />
+              ) : savedItems.length === 0 ? (
+                <p className="text-sm text-slate-400">
+                  Tap the ♥ on any item page to save it for later.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {savedItems
+                    .filter((s) => s.item)
+                    .map((s) => (
+                      <div key={s.id} className="relative">
+                        <ItemCard item={s.item!} />
+                        <button
+                          onClick={() => removeSaved(s.item!.id)}
+                          className="absolute right-5 top-5 rounded-full bg-white/90 p-1.5 text-slate-500 shadow transition hover:bg-rose-50 hover:text-rose-600"
+                          title="Remove from saved"
+                          aria-label="Remove from saved"
+                        >
+                          <FiX className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                </div>
               )}
             </div>
           </section>
@@ -210,6 +318,36 @@ export default function RenterDashboard() {
           </div>
         </aside>
       </div>
+
+      {/* Rate-owner modal */}
+      <Modal
+        open={rating !== null}
+        onClose={() => setRating(null)}
+        title="Rate the owner"
+        size="sm"
+      >
+        {rating && (
+          <div className="text-center">
+            <Avatar
+              src={rating.owner?.avatar_url}
+              name={rating.owner?.name}
+              size="lg"
+              className="mx-auto"
+            />
+            <p className="mt-2 font-semibold text-slate-900">{rating.owner?.name}</p>
+            <p className="text-xs text-slate-400">
+              How was renting &ldquo;{rating.item?.title}&rdquo;?
+            </p>
+            <div className="mt-4 flex justify-center">
+              {ratingBusy ? (
+                <span className="h-6 w-6 animate-spin rounded-full border-2 border-primary-500 border-t-transparent" />
+              ) : (
+                <RatingStars rating={null} size="md" interactive onChange={submitRating} />
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

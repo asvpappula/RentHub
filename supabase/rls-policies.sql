@@ -97,4 +97,13 @@ CREATE POLICY disputes_insert_participant ON disputes
       (r.renter_id = public.current_user_id() OR r.owner_id = public.current_user_id()))
   );
 
+-- SAVED ITEMS: private wishlist per user.
+ALTER TABLE saved_items ENABLE ROW LEVEL SECURITY;
+CREATE POLICY saved_items_select_own ON saved_items
+  FOR SELECT USING (user_id = public.current_user_id());
+CREATE POLICY saved_items_insert_own ON saved_items
+  FOR INSERT WITH CHECK (user_id = public.current_user_id());
+CREATE POLICY saved_items_delete_own ON saved_items
+  FOR DELETE USING (user_id = public.current_user_id());
+
 -- FRAUD FLAGS: service-role only (no client policies on purpose).

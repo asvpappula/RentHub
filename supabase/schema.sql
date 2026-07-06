@@ -107,6 +107,14 @@ CREATE TABLE disputes (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE saved_items (
+  id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  item_id BIGINT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE (user_id, item_id)
+);
+
 CREATE TABLE fraud_flags (
   id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   user_id BIGINT NOT NULL REFERENCES users(id),
@@ -117,6 +125,7 @@ CREATE TABLE fraud_flags (
 );
 
 CREATE INDEX idx_users_auth ON users(auth_id);
+CREATE INDEX idx_saved_items_user ON saved_items(user_id);
 CREATE INDEX idx_items_owner ON items(owner_id);
 CREATE INDEX idx_items_category ON items(category);
 CREATE INDEX idx_rentals_renter ON rentals(renter_id);

@@ -15,6 +15,7 @@ export function useMessages(otherUserId: number | null) {
   const [otherTyping, setOtherTyping] = useState(false);
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSent = useRef(0);
+  const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   useEffect(() => {
     if (!user || !otherUserId) {
@@ -89,9 +90,11 @@ export function useMessages(otherUserId: number | null) {
         }
       })
       .subscribe();
+    typingChannelRef.current = typingChannel;
 
     return () => {
       cancelled = true;
+      typingChannelRef.current = null;
       supabase.removeChannel(channel);
       supabase.removeChannel(typingChannel);
       if (typingTimeout.current) clearTimeout(typingTimeout.current);
@@ -99,14 +102,14 @@ export function useMessages(otherUserId: number | null) {
     };
   }, [user, otherUserId]);
 
-  /** Broadcast that the current user is typing (throttled to ~1/sec). */
+  /** Broadcast that the current user is typing (throttled to ~1/sec),
+   *  reusing the already-subscribed channel. */
   const notifyTyping = useCallback(() => {
-    if (!user || !otherUserId) return;
+    if (!user || !otherUserId || !typingChannelRef.current) return;
     const now = Date.now();
     if (now - lastTypingSent.current < 1000) return;
     lastTypingSent.current = now;
-    const pair = [user.id, otherUserId].sort((a, b) => a - b).join(":");
-    supabase.channel(`typing:${pair}`).send({
+    typingChannelRef.current.send({
       type: "broadcast",
       event: "typing",
       payload: { from: user.id },

@@ -1,11 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import type { AppNotification } from "@/types";
 
 export function useNotifications() {
+  // Channel topics must be unique per hook instance — two channels joining
+  // the same topic (e.g. navbar + dashboard) fight over the subscription.
+  const instanceId = useId();
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,7 +37,7 @@ export function useNotifications() {
       });
 
     const channel = supabase
-      .channel(`notifications:${user.id}`)
+      .channel(`notifications:${user.id}:${instanceId}`)
       .on(
         "postgres_changes",
         {

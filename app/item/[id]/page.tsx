@@ -11,6 +11,7 @@ import {
   FiMessageSquare,
   FiEye,
   FiRepeat,
+  FiHeart,
 } from "react-icons/fi";
 import type { Item, User } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
@@ -53,6 +54,8 @@ export default function ItemDetailPage({
   const [requesting, setRequesting] = useState(false);
   const [booked, setBooked] = useState<{ start_date: string; end_date: string }[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [saved, setSaved] = useState(false);
+  const [savingItem, setSavingItem] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -67,6 +70,44 @@ export default function ItemDetailPage({
       })
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    if (!user) return;
+    fetch("/api/saved-items")
+      .then((r) => r.json())
+      .then((data) =>
+        setSaved(
+          (data.saved ?? []).some(
+            (s: { item: { id: number } | null }) => s.item?.id === Number(id)
+          )
+        )
+      );
+  }, [user, id]);
+
+  const toggleSave = async () => {
+    if (!user) {
+      router.push(`/login?next=/item/${id}`);
+      return;
+    }
+    setSavingItem(true);
+    try {
+      if (saved) {
+        await fetch(`/api/saved-items/${id}`, { method: "DELETE" });
+        setSaved(false);
+        toast("info", "Removed from saved items.");
+      } else {
+        await fetch("/api/saved-items", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ item_id: Number(id) }),
+        });
+        setSaved(true);
+        toast("success", "Saved! Find it on your dashboard.");
+      }
+    } finally {
+      setSavingItem(false);
+    }
+  };
 
   const quote = useMemo(() => {
     if (!item || !startDate || !endDate || endDate <= startDate) return null;
@@ -464,6 +505,19 @@ export default function ItemDetailPage({
                 <p className="mt-3 text-center text-xs text-slate-400">
                   You won&apos;t be charged until the owner approves.
                 </p>
+                <Button
+                  variant="outline"
+                  className="mt-3 w-full"
+                  loading={savingItem}
+                  onClick={toggleSave}
+                >
+                  <FiHeart
+                    className={
+                      "h-4 w-4 " + (saved ? "fill-rose-500 text-rose-500" : "")
+                    }
+                  />
+                  {saved ? "Saved" : "Save item"}
+                </Button>
               </>
             )}
           </div>
