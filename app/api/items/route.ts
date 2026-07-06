@@ -7,6 +7,7 @@ import {
 } from "@/lib/api-helpers";
 import { createItemSchema } from "@/lib/validation";
 import { createSupabaseAdminClient } from "@/lib/supabase-server";
+import { checkFraudRisk } from "@/lib/fraud";
 
 const DEFAULT_PAGE_SIZE = 12;
 const MAX_PAGE_SIZE = 50;
@@ -77,6 +78,13 @@ export async function POST(request: Request) {
   try {
     const { user, admin } = await requireUser();
     const input = await parseBody(request, createItemSchema);
+
+    const { riskLevel } = await checkFraudRisk(admin, user);
+    if (riskLevel === "high")
+      throw new ApiError(
+        "Complete verification to list items — verify your phone and ID in Settings.",
+        403
+      );
 
     const { data, error } = await admin
       .from("items")

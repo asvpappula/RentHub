@@ -21,6 +21,8 @@ import { useToast } from "@/components/ui/Toast";
 import { formatMoney, formatDate } from "@/lib/utils";
 import RentalCard from "@/components/RentalCard";
 import EmptyState from "@/components/EmptyState";
+import VerificationBadges from "@/components/VerificationBadges";
+import { trustLevel, trustScore } from "@/lib/trust";
 import Button from "@/components/ui/Button";
 import Avatar from "@/components/ui/Avatar";
 import Skeleton from "@/components/ui/Skeleton";
@@ -200,7 +202,12 @@ export default function OwnerDashboard() {
                       />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm text-slate-900">
-                          <span className="font-semibold">{r.renter?.name}</span>{" "}
+                          <Link
+                            href={`/profile/${r.renter?.id}`}
+                            className="font-semibold hover:text-primary-700"
+                          >
+                            {r.renter?.name}
+                          </Link>{" "}
                           wants to rent{" "}
                           <Link
                             href={`/rental/${r.id}`}
@@ -213,6 +220,16 @@ export default function OwnerDashboard() {
                           {formatDate(r.start_date)} → {formatDate(r.end_date)} ·{" "}
                           {formatMoney(r.total_cost - r.deposit_amount)} to you
                         </p>
+                        {r.renter && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            <VerificationBadges user={r.renter} />
+                            {trustLevel(trustScore(r.renter)) === "low" && (
+                              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                                ⚠ Unverified renter
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div className="flex gap-2">
                         <Button

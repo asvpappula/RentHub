@@ -12,7 +12,7 @@ import { quotePrice } from "@/lib/utils";
 import { checkFraudRisk } from "@/lib/fraud";
 
 const RENTAL_SELECT =
-  "*, item:items(*, photos:item_photos(*)), renter:users!rentals_renter_id_fkey(id, name, avatar_url, average_rating, id_verified), owner:users!rentals_owner_id_fkey(id, name, avatar_url, average_rating, id_verified)";
+  "*, item:items(*, photos:item_photos(*)), renter:users!rentals_renter_id_fkey(id, name, avatar_url, average_rating, id_verified, phone_verified, background_check_status), owner:users!rentals_owner_id_fkey(id, name, avatar_url, average_rating, id_verified, phone_verified, background_check_status)";
 
 export async function GET(request: Request) {
   try {
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     const { riskLevel } = await checkFraudRisk(admin, user);
     if (riskLevel === "high")
       throw new ApiError(
-        "Additional verification is required before renting. Please verify your ID in Settings.",
+        "Complete verification to rent — verify your phone and ID in Settings.",
         403
       );
 

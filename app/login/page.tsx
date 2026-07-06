@@ -35,8 +35,14 @@ function LoginForm() {
       toast("success", "Welcome back!");
       router.push(searchParams.get("next") ?? "/dashboard");
       router.refresh();
-    } catch {
-      toast("error", "Invalid email or password.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      if (message.toLowerCase().includes("not confirmed")) {
+        toast("warning", "Please verify your email first — check your inbox.");
+        router.push(`/verify-email?email=${encodeURIComponent(values.email)}`);
+      } else {
+        toast("error", "Invalid email or password.");
+      }
       setSubmitting(false);
     }
   };

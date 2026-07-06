@@ -1,16 +1,31 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { FiMail, FiCheckCircle } from "react-icons/fi";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
+import { useToast } from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
 
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const email = searchParams.get("email");
   const { user } = useAuth();
+  const { toast } = useToast();
+  const [resending, setResending] = useState(false);
+
+  const resend = async () => {
+    if (!email) return;
+    setResending(true);
+    const { error } = await supabase.auth.resend({ type: "signup", email });
+    toast(
+      error ? "error" : "success",
+      error ? error.message : `Verification email resent to ${email}.`
+    );
+    setResending(false);
+  };
 
   // If the user landed here from the confirmation link, their session is live.
   if (user) {
@@ -42,9 +57,16 @@ function VerifyEmailContent() {
         We sent a verification link{email ? ` to ${email}` : ""}. Click it to
         activate your account, then come back and log in.
       </p>
-      <Link href="/login" className="mt-6 inline-block">
-        <Button variant="outline">Back to login</Button>
-      </Link>
+      <div className="mt-6 flex justify-center gap-3">
+        {email && (
+          <Button loading={resending} onClick={resend}>
+            Resend email
+          </Button>
+        )}
+        <Link href="/login">
+          <Button variant="outline">Back to login</Button>
+        </Link>
+      </div>
     </div>
   );
 }

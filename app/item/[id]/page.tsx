@@ -23,6 +23,10 @@ import RatingStars from "@/components/RatingStars";
 import TrustBadge from "@/components/TrustBadge";
 import PriceBreakdown from "@/components/PriceBreakdown";
 import AvailabilityCalendar from "@/components/AvailabilityCalendar";
+import TrustScore from "@/components/TrustScore";
+import VerificationBadges from "@/components/VerificationBadges";
+import Badge from "@/components/ui/Badge";
+import { trustLevel, trustScore } from "@/lib/trust";
 
 interface Review {
   id: number;
@@ -272,7 +276,14 @@ export default function ItemDetailPage({
               <div className="mt-3 flex items-center gap-4">
                 <Avatar src={item.owner.avatar_url} name={item.owner.name} size="lg" />
                 <div className="flex-1">
-                  <p className="font-semibold text-slate-900">{item.owner.name}</p>
+                  <p className="flex items-center gap-2 font-semibold text-slate-900">
+                    {item.owner.name}
+                    {trustLevel(trustScore(item.owner)) === "high" && (
+                      <Badge className="bg-primary-50 text-primary-700 ring-primary-200">
+                        Trusted owner
+                      </Badge>
+                    )}
+                  </p>
                   <div className="mt-0.5 flex flex-wrap items-center gap-2">
                     {item.owner.average_rating != null && (
                       <RatingStars
@@ -284,23 +295,34 @@ export default function ItemDetailPage({
                       Member since {formatDate(item.owner.created_at)}
                     </span>
                   </div>
-                  <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {item.owner.id_verified && <TrustBadge kind="id_verified" />}
-                    {item.owner.phone_verified && <TrustBadge kind="phone_verified" />}
-                    {item.owner.background_check_status === "approved" && (
-                      <TrustBadge kind="background_check" />
+                  <div className="mt-1.5">
+                    <VerificationBadges user={item.owner} />
+                  </div>
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                  <TrustScore user={item.owner} size="md" />
+                  <div className="flex gap-1.5">
+                    <Link href={`/profile/${item.owner.id}`}>
+                      <Button variant="outline" size="sm">
+                        Profile
+                      </Button>
+                    </Link>
+                    {!isOwner && (
+                      <Link href={user ? `/messages?user=${item.owner.id}` : "/login"}>
+                        <Button variant="outline" size="sm" aria-label="Message owner">
+                          <FiMessageSquare className="h-4 w-4" />
+                        </Button>
+                      </Link>
                     )}
                   </div>
                 </div>
-                {!isOwner && (
-                  <Link href={user ? `/messages?user=${item.owner.id}` : "/login"}>
-                    <Button variant="outline" size="sm">
-                      <FiMessageSquare className="h-4 w-4" />
-                      Message
-                    </Button>
-                  </Link>
-                )}
               </div>
+              {trustLevel(trustScore(item.owner)) === "low" && (
+                <p className="mt-4 rounded-xl bg-amber-50 p-3 text-xs text-amber-700">
+                  ⚠ This owner hasn&apos;t completed phone or ID verification yet.
+                  Message them and check reviews before booking.
+                </p>
+              )}
               {item.owner.bio && (
                 <p className="mt-4 text-sm text-slate-500">{item.owner.bio}</p>
               )}

@@ -8,7 +8,7 @@ import {
 } from "@/lib/api-helpers";
 
 const RENTAL_SELECT =
-  "*, item:items(*, photos:item_photos(*)), renter:users!rentals_renter_id_fkey(id, name, avatar_url, average_rating, id_verified, phone_verified), owner:users!rentals_owner_id_fkey(id, name, avatar_url, average_rating, id_verified, phone_verified)";
+  "*, item:items(*, photos:item_photos(*)), renter:users!rentals_renter_id_fkey(id, name, avatar_url, average_rating, id_verified, phone_verified, background_check_status), owner:users!rentals_owner_id_fkey(id, name, avatar_url, average_rating, id_verified, phone_verified, background_check_status)";
 
 const updateSchema = z.object({
   status: z.enum(["cancelled"]).optional(),
