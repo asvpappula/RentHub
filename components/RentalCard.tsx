@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { FiImage, FiCalendar } from "react-icons/fi";
+import { FiImage, FiCalendar, FiClock } from "react-icons/fi";
+import { differenceInCalendarDays, parseISO } from "date-fns";
 import type { Rental } from "@/types";
 import { formatDate, formatMoney, STATUS_STYLES } from "@/lib/utils";
 import Badge from "@/components/ui/Badge";
@@ -48,6 +49,28 @@ export default function RentalCard({
         <p className="flex items-center gap-1.5 text-xs text-slate-500">
           <FiCalendar className="h-3.5 w-3.5" />
           {formatDate(rental.start_date)} → {formatDate(rental.end_date)}
+          {["confirmed", "active"].includes(rental.status) &&
+            (() => {
+              const daysLeft = differenceInCalendarDays(
+                parseISO(rental.end_date),
+                new Date()
+              );
+              return (
+                <span
+                  className={
+                    "ml-1 inline-flex items-center gap-1 font-medium " +
+                    (daysLeft < 0 ? "text-rose-600" : "text-primary-700")
+                  }
+                >
+                  <FiClock className="h-3 w-3" />
+                  {daysLeft > 0
+                    ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`
+                    : daysLeft === 0
+                      ? "due back today"
+                      : `${-daysLeft} day${daysLeft === -1 ? "" : "s"} overdue`}
+                </span>
+              );
+            })()}
         </p>
 
         <div className="flex items-center justify-between">

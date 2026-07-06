@@ -7,12 +7,17 @@ import {
 } from "@/lib/api-helpers";
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
     const { user, admin } = await requireUser();
+
+    // Optional rejection reason, shared with the renter.
+    const body = await request.json().catch(() => ({}));
+    const reason =
+      typeof body?.reason === "string" ? body.reason.trim().slice(0, 500) : "";
 
     const { data: rental } = await admin
       .from("rentals")
@@ -37,7 +42,7 @@ export async function POST(
       rental.renter_id,
       "rental_rejected",
       "Rental request declined",
-      `Your request for "${rental.item?.title}" was declined by the owner.`,
+      `Your request for "${rental.item?.title}" was declined by the owner.${reason ? ` Reason: ${reason}` : ""}`,
       rental.id
     );
 

@@ -78,6 +78,13 @@ export async function POST(
         .eq("id", rental.id);
     }
 
+    // The rental is over either way — put the item back on the market.
+    await admin
+      .from("items")
+      .update({ availability_status: "available" })
+      .eq("id", rental.item_id)
+      .eq("availability_status", "rented");
+
     const { data, error } = await admin
       .from("disputes")
       .update({

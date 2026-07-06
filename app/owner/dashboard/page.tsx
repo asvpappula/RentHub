@@ -22,6 +22,9 @@ import { formatMoney, formatDate } from "@/lib/utils";
 import RentalCard from "@/components/RentalCard";
 import EmptyState from "@/components/EmptyState";
 import VerificationBadges from "@/components/VerificationBadges";
+import TrustScore from "@/components/TrustScore";
+import Modal from "@/components/ui/Modal";
+import { Textarea } from "@/components/ui/Input";
 import { trustLevel, trustScore } from "@/lib/trust";
 import Button from "@/components/ui/Button";
 import Avatar from "@/components/ui/Avatar";
@@ -34,6 +37,9 @@ export default function OwnerDashboard() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<number | null>(null);
+  const [rejecting, setRejecting] = useState<Rental | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [togglingItem, setTogglingItem] = useState<number | null>(null);
 
   const load = useCallback(() => {
     Promise.all([
@@ -74,11 +80,21 @@ export default function OwnerDashboard() {
     earningRentals.filter((r) => isAfter(parseISO(r.created_at), startOfYear(new Date())))
   );
 
-  const decide = async (rentalId: number, action: "approve" | "reject") => {
+  const decide = async (
+    rentalId: number,
+    action: "approve" | "reject",
+    reason?: string
+  ) => {
     setActing(rentalId);
     try {
       const res = await fetch(`/api/rentals/${rentalId}/${action}`, {
         method: "POST",
+        ...(action === "reject"
+          ? {
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ reason: reason || undefined }),
+            }
+          : {}),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Action failed");
@@ -86,11 +102,44 @@ export default function OwnerDashboard() {
         "success",
         action === "approve" ? "Request approved — renter can now pay." : "Request declined."
       );
+      setRejecting(null);
+      setRejectReason("");
       load();
     } catch (err) {
       toast("error", err instanceof Error ? err.message : "Action failed");
     } finally {
       setActing(null);
+    }
+  };
+
+  /** Toggle a listing between available and archived (hidden from Browse). */
+  const toggleArchive = async (item: Item) => {
+    setTogglingItem(item.id);
+    try {
+      const next =
+        item.availability_status === "unavailable" ? "available" : "unavailable";
+      const res = await fetch(`/api/items/${item.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ availability_status: next }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Update failed");
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === item.id ? { ...i, availability_status: next } : i
+        )
+      );
+      toast(
+        "success",
+        next === "unavailable"
+          ? "Listing archived — hidden from Browse."
+          : "Listing is live again."
+      );
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Update failed");
+    } finally {
+      setTogglingItem(null);
     }
   };
 
@@ -231,6 +280,7 @@ export default function OwnerDashboard() {
                           </div>
                         )}
                       </div>
+                      {r.renter && <TrustScore user={r.renter} size="sm" />}
                       <div className="flex gap-2">
                         <Button
                           size="sm"
@@ -243,7 +293,7 @@ export default function OwnerDashboard() {
                           size="sm"
                           variant="outline"
                           disabled={acting === r.id}
-                          onClick={() => decide(r.id, "reject")}
+                          onClick={() => setRejecting(r)}
                         >
                           <FiX className="h-4 w-4" /> Decline
                         </Button>
@@ -353,6 +403,24 @@ export default function OwnerDashboard() {
                     }`}
                     title={item.availability_status}
                   />
+                  <button
+                    onClick={() => toggleArchive(item)}
+                    disabled={
+                      togglingItem === item.id ||
+                      item.availability_status === "rented"
+                    }
+                    className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-50 hover:text-amber-600 disabled:opacity-40"
+                    title={
+                      item.availability_status === "rented"
+                        ? "Currently rented"
+                        : item.availability_status === "unavailable"
+                          ? "Unarchive (show in Browse)"
+                          : "Archive (hide from Browse)"
+                    }
+                    aria-label={`Archive ${item.title}`}
+                  >
+                    <FiArchive className="h-4 w-4" />
+                  </button>
                   <Link
                     href={`/owner/items/${item.id}/edit`}
                     className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-50 hover:text-primary-600"
@@ -366,6 +434,40 @@ export default function OwnerDashboard() {
           </div>
         </aside>
       </div>
+
+      {/* Decline-with-reason modal */}
+      <Modal
+        open={rejecting !== null}
+        onClose={() => setRejecting(null)}
+        title="Decline this request?"
+        size="sm"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setRejecting(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              loading={acting === rejecting?.id}
+              onClick={() => rejecting && decide(rejecting.id, "reject", rejectReason)}
+            >
+              Decline request
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-sm text-slate-500">
+          {rejecting?.renter?.name} will be notified that their request for
+          &ldquo;{rejecting?.item?.title}&rdquo; was declined.
+        </p>
+        <div className="mt-4">
+          <Textarea
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            placeholder="Reason (optional) — shared with the renter"
+          />
+        </div>
+      </Modal>
     </div>
   );
 }
