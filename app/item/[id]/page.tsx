@@ -12,7 +12,7 @@ import {
   FiEye,
   FiRepeat,
 } from "react-icons/fi";
-import type { Item } from "@/types";
+import type { Item, User } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
 import { quotePrice, formatMoney, formatDate, CONDITION_LABELS } from "@/lib/utils";
@@ -22,6 +22,14 @@ import Skeleton from "@/components/ui/Skeleton";
 import RatingStars from "@/components/RatingStars";
 import TrustBadge from "@/components/TrustBadge";
 import PriceBreakdown from "@/components/PriceBreakdown";
+import AvailabilityCalendar from "@/components/AvailabilityCalendar";
+
+interface Review {
+  id: number;
+  rating: number;
+  date: string;
+  reviewer: Pick<User, "id" | "name" | "avatar_url"> | null;
+}
 
 export default function ItemDetailPage({
   params,
@@ -39,11 +47,20 @@ export default function ItemDetailPage({
   const [startDate, setStartDate] = useState(format(addDays(new Date(), 1), "yyyy-MM-dd"));
   const [endDate, setEndDate] = useState(format(addDays(new Date(), 3), "yyyy-MM-dd"));
   const [requesting, setRequesting] = useState(false);
+  const [booked, setBooked] = useState<{ start_date: string; end_date: string }[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
 
   useEffect(() => {
-    fetch(`/api/items/${id}`)
-      .then((r) => r.json())
-      .then((data) => setItem(data.item ?? null))
+    Promise.all([
+      fetch(`/api/items/${id}`).then((r) => r.json()),
+      fetch(`/api/items/${id}/availability`).then((r) => r.json()),
+      fetch(`/api/items/${id}/reviews`).then((r) => r.json()),
+    ])
+      .then(([itemData, availData, reviewData]) => {
+        setItem(itemData.item ?? null);
+        setBooked(availData.booked ?? []);
+        setReviews(reviewData.reviews ?? []);
+      })
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -141,6 +158,11 @@ export default function ItemDetailPage({
                 <FiImage className="h-16 w-16" />
               </div>
             )}
+            {photos.length > 0 && (
+              <span className="absolute right-3 top-3 rounded-full bg-slate-900/60 px-2.5 py-1 text-xs font-medium text-white backdrop-blur">
+                {photoIndex + 1}/{photos.length}
+              </span>
+            )}
             {photos.length > 1 && (
               <>
                 <button
@@ -218,6 +240,29 @@ export default function ItemDetailPage({
             )}
           </div>
 
+          {/* Availability calendar */}
+          {!isOwner && (
+            <div className="mt-8 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+                Availability
+              </h2>
+              <p className="mt-1 text-xs text-slate-400">
+                Click a start and end date — the price updates instantly.
+              </p>
+              <div className="mt-4">
+                <AvailabilityCalendar
+                  booked={booked}
+                  startDate={startDate}
+                  endDate={endDate}
+                  onChange={(s, e) => {
+                    setStartDate(s);
+                    setEndDate(e);
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Owner card */}
           {item.owner && (
             <div className="mt-8 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
@@ -239,9 +284,12 @@ export default function ItemDetailPage({
                       Member since {formatDate(item.owner.created_at)}
                     </span>
                   </div>
-                  <div className="mt-1.5 flex gap-1.5">
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {item.owner.id_verified && <TrustBadge kind="id_verified" />}
                     {item.owner.phone_verified && <TrustBadge kind="phone_verified" />}
+                    {item.owner.background_check_status === "approved" && (
+                      <TrustBadge kind="background_check" />
+                    )}
                   </div>
                 </div>
                 {!isOwner && (
@@ -258,6 +306,41 @@ export default function ItemDetailPage({
               )}
             </div>
           )}
+
+          {/* Reviews */}
+          <div className="mt-8 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+              Reviews from renters
+            </h2>
+            {reviews.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-400">
+                No reviews yet — be the first to rent this item.
+              </p>
+            ) : (
+              <ul className="mt-4 space-y-4">
+                {reviews.map((review) => (
+                  <li key={review.id} className="flex items-start gap-3">
+                    <Avatar
+                      src={review.reviewer?.avatar_url}
+                      name={review.reviewer?.name}
+                      size="sm"
+                    />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-slate-900">
+                          {review.reviewer?.name ?? "RentHub member"}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {formatDate(review.date)}
+                        </span>
+                      </div>
+                      <RatingStars rating={review.rating} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
 
         {/* Right: booking card */}

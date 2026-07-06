@@ -20,7 +20,7 @@ export async function GET(
     const { data } = await admin
       .from("items")
       .select(
-        "*, owner:users!items_owner_id_fkey(id, name, avatar_url, bio, average_rating, total_reviews, total_rentals, id_verified, phone_verified, created_at), photos:item_photos(*)"
+        "*, owner:users!items_owner_id_fkey(id, name, avatar_url, bio, average_rating, total_reviews, total_rentals, id_verified, phone_verified, background_check_status, created_at), photos:item_photos(*)"
       )
       .eq("id", itemId)
       .single();
