@@ -5,11 +5,22 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Message } from "@/types";
 
+/**
+ * In-memory conversation cache (stale-while-revalidate): switching tabs,
+ * conversations, or pages shows cached messages instantly while a background
+ * fetch refreshes them. Realtime keeps it current in between.
+ */
+const messageCache = new Map<number, Message[]>();
+
 /** Live conversation with another user. */
 export function useMessages(otherUserId: number | null) {
   const { user } = useAuth();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [messages, setMessagesState] = useState<Message[]>(
+    () => (otherUserId && messageCache.get(otherUserId)) || []
+  );
+  const [loading, setLoading] = useState(
+    () => !(otherUserId && messageCache.has(otherUserId))
+  );
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [otherTyping, setOtherTyping] = useState(false);
@@ -17,22 +28,44 @@ export function useMessages(otherUserId: number | null) {
   const lastTypingSent = useRef(0);
   const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
+  // Write-through: keep the cache in sync with every state update.
+  const setMessages = useCallback(
+    (update: Message[] | ((prev: Message[]) => Message[])) => {
+      setMessagesState((prev) => {
+        const next = typeof update === "function" ? update(prev) : update;
+        if (otherUserId) messageCache.set(otherUserId, next);
+        return next;
+      });
+    },
+    [otherUserId]
+  );
+
   useEffect(() => {
     if (!user || !otherUserId) {
-      setMessages([]);
+      setMessagesState([]);
       setLoading(false);
       return;
     }
 
     let cancelled = false;
-    setLoading(true);
+    const cached = messageCache.get(otherUserId);
+    if (cached) {
+      // Instant render from cache; refresh silently in the background.
+      setMessagesState(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
 
     fetch(`/api/messages/${otherUserId}`)
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
         if (data.error) setError(data.error);
-        else setMessages(data.messages ?? []);
+        else {
+          messageCache.set(otherUserId, data.messages ?? []);
+          setMessagesState(data.messages ?? []);
+        }
         setLoading(false);
       })
       .catch((e) => {
@@ -86,7 +119,7 @@ export function useMessages(otherUserId: number | null) {
         if (payload?.from === otherUserId) {
           setOtherTyping(true);
           if (typingTimeout.current) clearTimeout(typingTimeout.current);
-          typingTimeout.current = setTimeout(() => setOtherTyping(false), 2500);
+          typingTimeout.current = setTimeout(() => setOtherTyping(false), 3000);
         }
       })
       .subscribe();
