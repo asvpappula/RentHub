@@ -4,14 +4,12 @@ import {
   FiLock,
   FiMapPin,
   FiPhone,
-  FiUserCheck,
 } from "react-icons/fi";
 import Badge from "@/components/ui/Badge";
 
 type TrustKind =
   | "id_verified"
   | "phone_verified"
-  | "background_check"
   | "insurance"
   | "deposit"
   | "gps";
@@ -31,12 +29,6 @@ const CONFIG: Record<
     label: "Phone verified",
     className: "bg-secondary-50 text-secondary-700 ring-secondary-200",
     explainer: "This member confirmed their phone number via SMS.",
-  },
-  background_check: {
-    icon: <FiUserCheck className="h-3 w-3" />,
-    label: "Background checked",
-    className: "bg-primary-50 text-primary-700 ring-primary-200",
-    explainer: "This member passed a third-party background check.",
   },
   insurance: {
     icon: <FiShield className="h-3 w-3" />,

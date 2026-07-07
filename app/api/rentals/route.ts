@@ -12,7 +12,7 @@ import { quotePrice } from "@/lib/utils";
 import { checkFraudRisk } from "@/lib/fraud";
 
 const RENTAL_SELECT =
-  "*, item:items(*, photos:item_photos(*)), renter:users!rentals_renter_id_fkey(id, name, avatar_url, average_rating, id_verified, phone_verified, background_check_status), owner:users!rentals_owner_id_fkey(id, name, avatar_url, average_rating, id_verified, phone_verified, background_check_status)";
+  "*, item:items(*, photos:item_photos(*)), renter:users!rentals_renter_id_fkey(id, name, avatar_url, average_rating, id_verified, phone_verified, total_reviews, total_rentals, created_at), owner:users!rentals_owner_id_fkey(id, name, avatar_url, average_rating, id_verified, phone_verified, total_reviews, total_rentals, created_at)";
 
 export async function GET(request: Request) {
   try {

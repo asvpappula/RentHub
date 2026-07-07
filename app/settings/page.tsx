@@ -104,10 +104,6 @@ export default function SettingsPage() {
     { label: "Email", verified: true },
     { label: "Phone", verified: user.phone_verified },
     { label: "Government ID", verified: user.id_verified },
-    {
-      label: "Background check",
-      verified: user.background_check_status === "approved",
-    },
   ];
 
   return (
@@ -208,7 +204,10 @@ export default function SettingsPage() {
           )}
         </div>
         <p className="mt-3 text-xs text-slate-400">
-          Background checks are coming soon (Checkr integration).
+          <Link href="/trust" className="font-semibold text-primary-600 hover:underline">
+            How trust works
+          </Link>{" "}
+          — see your full score breakdown and the path to 100.
         </p>
       </section>
 

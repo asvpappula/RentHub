@@ -2,20 +2,29 @@ import type { User } from "@/types";
 import { trustLevel, trustScore, TRUST_COLORS, TRUST_STROKE } from "@/lib/trust";
 import { cn } from "@/lib/utils";
 
-type TrustUser = Pick<
-  User,
-  "phone_verified" | "id_verified" | "background_check_status"
+type TrustUser = Partial<
+  Pick<
+    User,
+    | "phone_verified"
+    | "id_verified"
+    | "average_rating"
+    | "total_reviews"
+    | "total_rentals"
+    | "created_at"
+  >
 >;
 
 /** Circular trust-score indicator (0–100). */
 export default function TrustScore({
   user,
   size = "md",
+  cleanClaimsRecord,
 }: {
   user: TrustUser;
   size?: "sm" | "md" | "lg";
+  cleanClaimsRecord?: boolean;
 }) {
-  const score = trustScore(user);
+  const score = trustScore(user, { cleanClaimsRecord });
   const level = trustLevel(score);
 
   const px = size === "lg" ? 96 : size === "md" ? 64 : 40;
@@ -26,7 +35,7 @@ export default function TrustScore({
   return (
     <div
       className="relative inline-flex items-center justify-center"
-      title={`Trust score ${score}/100 — based on completed verifications`}
+      title={`Trust score ${score}/100 — see How Trust Works for the breakdown`}
       style={{ width: px, height: px }}
     >
       <svg width={px} height={px} className="-rotate-90">

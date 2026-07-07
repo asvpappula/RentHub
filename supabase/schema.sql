@@ -16,7 +16,6 @@ CREATE TABLE users (
   id_verified_at TIMESTAMP,
   stripe_verification_session_id VARCHAR(255),
   terms_accepted_at TIMESTAMP,
-  background_check_status VARCHAR(50) DEFAULT 'pending',
   average_rating DECIMAL(3,2),
   total_reviews INT DEFAULT 0,
   total_rentals INT DEFAULT 0,

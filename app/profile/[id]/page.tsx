@@ -90,7 +90,12 @@ export default function ProfilePage({
           </div>
           <div className="flex flex-col items-center gap-2">
             <TrustScore user={profile} size="lg" />
-            <span className="text-xs font-medium text-slate-400">Trust score</span>
+            <Link
+              href="/trust"
+              className="text-xs font-medium text-slate-400 hover:text-primary-600 hover:underline"
+            >
+              Trust score · Learn more
+            </Link>
             {me && me.id !== profile.id && (
               <Link href={`/messages?user=${profile.id}`}>
                 <Button variant="outline" size="sm">

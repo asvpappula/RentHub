@@ -378,6 +378,12 @@ export default function ItemDetailPage({
                 </div>
                 <div className="flex flex-col items-center gap-2">
                   <TrustScore user={item.owner} size="md" />
+                  <Link
+                    href="/trust"
+                    className="text-[10px] font-medium text-slate-400 hover:text-primary-600 hover:underline"
+                  >
+                    Learn more
+                  </Link>
                   <div className="flex gap-1.5">
                     <Link href={`/profile/${item.owner.id}`}>
                       <Button variant="outline" size="sm">

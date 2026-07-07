@@ -15,7 +15,7 @@ export async function GET() {
     const { data, error } = await admin
       .from("saved_items")
       .select(
-        "id, created_at, item:items(*, owner:users!items_owner_id_fkey(id, name, avatar_url, average_rating, id_verified, phone_verified, background_check_status), photos:item_photos(*))"
+        "id, created_at, item:items(*, owner:users!items_owner_id_fkey(id, name, avatar_url, average_rating, id_verified, phone_verified, total_reviews, total_rentals, created_at), photos:item_photos(*))"
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });

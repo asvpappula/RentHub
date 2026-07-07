@@ -18,7 +18,7 @@ export async function GET(
     const { data } = await admin
       .from("users")
       .select(
-        "id, name, avatar_url, bio, phone_verified, id_verified, background_check_status, average_rating, total_reviews, total_rentals, created_at"
+        "id, name, avatar_url, bio, phone_verified, id_verified, average_rating, total_reviews, total_rentals, created_at"
       )
       .eq("id", Number(id))
       .single();
