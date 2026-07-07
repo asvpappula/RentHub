@@ -16,6 +16,7 @@ CREATE TABLE users (
   id_verified_at TIMESTAMP,
   stripe_verification_session_id VARCHAR(255),
   terms_accepted_at TIMESTAMP,
+  is_admin BOOLEAN DEFAULT FALSE,
   average_rating DECIMAL(3,2),
   total_reviews INT DEFAULT 0,
   total_rentals INT DEFAULT 0,
@@ -110,6 +111,73 @@ CREATE TABLE disputes (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- ===== Phase 2: Stripe Connect owner payouts + payment ledger =====
+CREATE TABLE connected_accounts (
+  id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  user_id BIGINT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  stripe_account_id VARCHAR(255) NOT NULL UNIQUE,
+  account_type VARCHAR(30) DEFAULT 'express',
+  charges_enabled BOOLEAN DEFAULT FALSE,
+  payouts_enabled BOOLEAN DEFAULT FALSE,
+  details_submitted BOOLEAN DEFAULT FALSE,
+  requirements_currently_due TEXT[] DEFAULT '{}',
+  requirements_eventually_due TEXT[] DEFAULT '{}',
+  requirements_past_due TEXT[] DEFAULT '{}',
+  disabled_reason TEXT,
+  onboarding_complete BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  last_synced_at TIMESTAMPTZ
+);
+
+CREATE TABLE payments (
+  id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  rental_id BIGINT NOT NULL REFERENCES rentals(id),
+  renter_id BIGINT NOT NULL REFERENCES users(id),
+  owner_id BIGINT NOT NULL REFERENCES users(id),
+  item_id BIGINT NOT NULL REFERENCES items(id),
+  stripe_payment_intent_id VARCHAR(255) UNIQUE,
+  stripe_charge_id VARCHAR(255),
+  stripe_checkout_session_id VARCHAR(255),
+  amount_cents INT NOT NULL,
+  platform_fee_cents INT NOT NULL,
+  owner_payout_cents INT NOT NULL,
+  currency VARCHAR(10) DEFAULT 'usd',
+  status VARCHAR(30) DEFAULT 'pending',
+  dispute_status VARCHAR(30),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE payouts (
+  id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  rental_id BIGINT NOT NULL UNIQUE REFERENCES rentals(id),
+  payment_id BIGINT REFERENCES payments(id),
+  owner_id BIGINT NOT NULL REFERENCES users(id),
+  connected_account_id BIGINT REFERENCES connected_accounts(id),
+  stripe_transfer_id VARCHAR(255),
+  amount_cents INT NOT NULL,
+  currency VARCHAR(10) DEFAULT 'usd',
+  status VARCHAR(30) DEFAULT 'pending',
+  hold_reason TEXT,
+  released_by BIGINT REFERENCES users(id),
+  released_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE refunds (
+  id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  rental_id BIGINT NOT NULL REFERENCES rentals(id),
+  payment_id BIGINT REFERENCES payments(id),
+  stripe_refund_id VARCHAR(255) UNIQUE,
+  amount_cents INT NOT NULL,
+  reason TEXT,
+  status VARCHAR(30) DEFAULT 'pending',
+  created_by BIGINT REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
 CREATE TABLE saved_items (
   id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -157,6 +225,12 @@ CREATE INDEX idx_users_auth ON users(auth_id);
 CREATE INDEX idx_saved_items_user ON saved_items(user_id);
 CREATE INDEX idx_phone_codes_user ON phone_verification_codes(user_id);
 CREATE INDEX idx_claims_rental ON insurance_claims(rental_id);
+CREATE INDEX idx_connected_accounts_user ON connected_accounts(user_id);
+CREATE INDEX idx_connected_accounts_stripe ON connected_accounts(stripe_account_id);
+CREATE INDEX idx_payments_rental ON payments(rental_id);
+CREATE INDEX idx_payments_owner ON payments(owner_id);
+CREATE INDEX idx_payouts_owner ON payouts(owner_id);
+CREATE INDEX idx_refunds_rental ON refunds(rental_id);
 CREATE INDEX idx_items_owner ON items(owner_id);
 CREATE INDEX idx_items_category ON items(category);
 CREATE INDEX idx_rentals_renter ON rentals(renter_id);

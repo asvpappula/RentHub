@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -47,6 +48,14 @@ export default function ListItemPage() {
   });
 
   const [dragging, setDragging] = useState(false);
+  const [payoutState, setPayoutState] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/connect/status")
+      .then((r) => r.json())
+      .then((d) => setPayoutState(d.status?.state ?? null))
+      .catch(() => {});
+  }, []);
 
   const addFiles = (list: FileList | DataTransferItemList | File[] | null) => {
     if (!list) return;
@@ -119,6 +128,23 @@ export default function ListItemPage() {
       <p className="mt-1 text-sm text-slate-500">
         The average item earns its owner $75–$300 per month.
       </p>
+
+      {/* Payout-readiness warning — only when Connect is live and not ready */}
+      {payoutState &&
+        payoutState !== "unavailable" &&
+        payoutState !== "enabled" && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <p className="text-sm text-amber-800">
+              You can list now, but you&apos;ll need to finish payout setup
+              before you can accept paid bookings.
+            </p>
+            <Link href="/owner/payouts">
+              <Button size="sm" variant="secondary">
+                Set up payouts
+              </Button>
+            </Link>
+          </div>
+        )}
 
       <form
         onSubmit={handleSubmit(onSubmit)}

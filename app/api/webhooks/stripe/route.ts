@@ -4,6 +4,8 @@ import { getStripeServer } from "@/lib/stripe-server";
 import { createSupabaseAdminClient } from "@/lib/supabase-server";
 import { createNotification } from "@/lib/api-helpers";
 import { finalizeRentalConfirmation } from "@/lib/rental-confirmation";
+import { syncConnectedAccount } from "@/lib/connect";
+import { reverseOrBlockPayout } from "@/lib/payouts";
 
 export async function POST(request: Request) {
   const signature = request.headers.get("stripe-signature");
@@ -143,23 +145,57 @@ export async function POST(request: Request) {
             ? charge.payment_intent
             : charge.payment_intent?.id;
         if (intentId) {
+          // Deposit refund → mark the deposit refunded.
           await admin
             .from("rentals")
             .update({ deposit_status: "refunded" })
             .eq("deposit_payment_intent_id", intentId)
-            .eq("deposit_status", "held");
+            .in("deposit_status", ["held", "refunding"]);
+
+          // RENTAL charge refund → the renter got their money back, so the
+          // owner must NOT be paid. Mark the payment refunded and block or
+          // claw back the payout.
+          const { data: pay } = await admin
+            .from("payments")
+            .update({ status: "refunded" })
+            .eq("stripe_payment_intent_id", intentId)
+            .select("rental_id")
+            .maybeSingle();
+          if (pay) await reverseOrBlockPayout(admin, stripe, pay.rental_id, "rental_refunded");
+        }
+        break;
+      }
+
+      case "charge.succeeded": {
+        // Backfill the charge id on the payment ledger (needed as the
+        // transfer source_transaction) in case it wasn't available at confirm.
+        const charge = event.data.object;
+        const intentId =
+          typeof charge.payment_intent === "string"
+            ? charge.payment_intent
+            : charge.payment_intent?.id;
+        if (intentId) {
+          await admin
+            .from("payments")
+            .update({ stripe_charge_id: charge.id })
+            .eq("stripe_payment_intent_id", intentId)
+            .is("stripe_charge_id", null);
         }
         break;
       }
 
       case "charge.dispute.created": {
-        // Chargeback opened — flag the rental for admin review (Phase 3).
+        // Chargeback opened — flag rental + payment, BLOCK the owner payout.
         const dispute = event.data.object;
         const intentId =
           typeof dispute.payment_intent === "string"
             ? dispute.payment_intent
             : dispute.payment_intent?.id;
         if (intentId) {
+          await admin
+            .from("payments")
+            .update({ dispute_status: "disputed" })
+            .eq("stripe_payment_intent_id", intentId);
           const { data: rental } = await admin
             .from("rentals")
             .select("id, renter_id, owner_id")
@@ -169,6 +205,7 @@ export async function POST(request: Request) {
             .maybeSingle();
           if (rental) {
             await admin.from("rentals").update({ status: "disputed" }).eq("id", rental.id);
+            await reverseOrBlockPayout(admin, stripe, rental.id, "chargeback");
             for (const uid of [rental.owner_id, rental.renter_id]) {
               await createNotification(
                 admin,
@@ -179,6 +216,85 @@ export async function POST(request: Request) {
               );
             }
           }
+        }
+        break;
+      }
+
+      case "charge.dispute.updated":
+      case "charge.dispute.closed": {
+        const dispute = event.data.object;
+        const intentId =
+          typeof dispute.payment_intent === "string"
+            ? dispute.payment_intent
+            : dispute.payment_intent?.id;
+        if (intentId) {
+          // status e.g. won / lost / warning_closed
+          await admin
+            .from("payments")
+            .update({ dispute_status: dispute.status })
+            .eq("stripe_payment_intent_id", intentId);
+        }
+        break;
+      }
+
+      case "account.updated": {
+        // Authoritative connected-account state from Stripe.
+        const account = event.data.object;
+        const uid = Number(account.metadata?.renthub_user_id ?? 0);
+        await syncConnectedAccount(admin, uid, account);
+        break;
+      }
+
+      case "transfer.created": {
+        // Confirmation of the payout transfer we created. Only advance a
+        // still-active payout — never overwrite a blocked/reversed one (events
+        // can arrive out of order or be redelivered).
+        const transfer = event.data.object;
+        const rentalId = Number(transfer.metadata?.rental_id ?? 0);
+        if (rentalId) {
+          await admin
+            .from("payouts")
+            .update({ stripe_transfer_id: transfer.id, status: "transferred", updated_at: new Date().toISOString() })
+            .eq("rental_id", rentalId)
+            .in("status", ["pending", "releasing", "transferred"]);
+        }
+        break;
+      }
+
+      case "transfer.reversed": {
+        // Reversal is terminal — record it, but only from a non-reversed state.
+        const transfer = event.data.object;
+        const rentalId = Number(transfer.metadata?.rental_id ?? 0);
+        if (rentalId) {
+          await admin
+            .from("payouts")
+            .update({ status: "reversed", updated_at: new Date().toISOString() })
+            .eq("rental_id", rentalId)
+            .in("status", ["transferred", "reversing"]);
+        }
+        break;
+      }
+
+      case "payout.failed": {
+        // A connected account's bank payout failed (Connect event). Notify the
+        // owner so they can fix their payout details; log for ops visibility.
+        console.error("[stripe-webhook] payout.failed", event.id);
+        const payout = event.data.object;
+        const connectedAccountId = event.account; // the connected account id
+        if (connectedAccountId) {
+          const { data: acct } = await admin
+            .from("connected_accounts")
+            .select("user_id")
+            .eq("stripe_account_id", connectedAccountId)
+            .maybeSingle();
+          if (acct)
+            await createNotification(
+              admin,
+              acct.user_id,
+              "message",
+              "Payout failed",
+              `A bank payout failed (${payout.failure_message ?? "unknown reason"}). Update your payout details in the owner dashboard.`
+            );
         }
         break;
       }

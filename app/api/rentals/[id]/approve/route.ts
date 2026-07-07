@@ -5,6 +5,8 @@ import {
   handleApiError,
   requireUser,
 } from "@/lib/api-helpers";
+import { connectEnabled } from "@/lib/payments-math";
+import { ownerPayoutReady } from "@/lib/connect";
 
 export async function POST(
   _request: Request,
@@ -23,6 +25,14 @@ export async function POST(
     if (rental.owner_id !== user.id) throw new ApiError("Forbidden", 403);
     if (rental.status !== "pending")
       throw new ApiError("Only pending requests can be approved", 409);
+
+    // Owners must finish payout onboarding before accepting paid bookings
+    // (only enforced once Connect is live).
+    if (connectEnabled() && !(await ownerPayoutReady(admin, user.id)))
+      throw new ApiError(
+        "Set up payouts before approving bookings — open your owner dashboard to finish onboarding.",
+        409
+      );
 
     // Re-check availability at approval time (not just at request time): the
     // item may have been booked for overlapping dates since the request.

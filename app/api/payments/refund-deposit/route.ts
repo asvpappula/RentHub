@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import {
   ApiError,
-  createNotification,
   handleApiError,
   parseBody,
   requireUser,
 } from "@/lib/api-helpers";
 import { paymentIntentSchema } from "@/lib/validation";
 import { getStripeServer } from "@/lib/stripe-server";
+import { releaseDepositHold } from "@/lib/deposit";
 
 /** Owner releases the deposit hold after a damage-free return. */
 export async function POST(request: Request) {
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
 
     const { data: rental } = await admin
       .from("rentals")
-      .select("*, item:items(title)")
+      .select("id, owner_id, renter_id, deposit_amount, deposit_status, deposit_payment_intent_id, item:items(title)")
       .eq("id", rental_id)
       .single();
     if (!rental) throw new ApiError("Rental not found", 404);
@@ -28,34 +28,21 @@ export async function POST(request: Request) {
       throw new ApiError("No deposit payment on file", 409);
 
     const stripe = getStripeServer();
-    const intent = await stripe.paymentIntents.retrieve(
-      rental.deposit_payment_intent_id
-    );
+    const itemTitle = Array.isArray(rental.item)
+      ? rental.item[0]?.title
+      : (rental.item as { title?: string } | null)?.title;
 
-    if (intent.status === "requires_capture") {
-      // Uncaptured hold — cancelling releases the funds.
-      await stripe.paymentIntents.cancel(intent.id);
-    } else if (intent.status === "succeeded") {
-      await stripe.refunds.create({ payment_intent: intent.id });
-    } else {
-      throw new ApiError(`Deposit in unexpected state: ${intent.status}`, 409);
-    }
+    // Race-safe + idempotent: claims the transition, refunds once.
+    const done = await releaseDepositHold(admin, stripe, {
+      id: rental.id,
+      renter_id: rental.renter_id,
+      deposit_amount: rental.deposit_amount,
+      deposit_status: rental.deposit_status,
+      deposit_payment_intent_id: rental.deposit_payment_intent_id,
+      item: { title: itemTitle },
+    });
 
-    await admin
-      .from("rentals")
-      .update({ deposit_status: "refunded" })
-      .eq("id", rental_id);
-
-    await createNotification(
-      admin,
-      rental.renter_id,
-      "deposit_refunded",
-      "Deposit released",
-      `Your ${rental.deposit_amount ? `$${rental.deposit_amount} ` : ""}deposit for "${rental.item?.title}" has been released.`,
-      rental_id
-    );
-
-    return NextResponse.json({ success: true, deposit_status: "refunded" });
+    return NextResponse.json({ success: done, deposit_status: "refunded" });
   } catch (err) {
     return handleApiError(err);
   }

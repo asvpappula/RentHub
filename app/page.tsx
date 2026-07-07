@@ -83,9 +83,9 @@ const PRICING = [
     detail: "Pay only for what you rent",
     features: [
       "No membership fees",
-      "5% insurance fee per rental",
+      "5% damage-protection fee per rental",
       "Deposit fully refundable",
-      "24/7 dispute support",
+      "Built-in dispute resolution",
     ],
     highlight: false,
   },
@@ -95,9 +95,9 @@ const PRICING = [
     detail: "commission per completed rental",
     features: [
       "Free unlimited listings",
-      "Insurance included",
+      "Damage protection included",
       "Deposit protection",
-      "Weekly payouts",
+      "Payouts via Stripe",
     ],
     highlight: true,
   },

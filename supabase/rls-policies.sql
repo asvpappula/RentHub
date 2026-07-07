@@ -84,6 +84,14 @@ CREATE POLICY claims_select_own ON insurance_claims
 
 -- FRAUD FLAGS: no client access at all (service-role only).
 
+-- FINANCIAL TABLES (Phase 2): RLS on, NO client policies → all reads/writes
+-- go through service-role API routes. Sensitive payment/payout/connect data
+-- never touches the browser directly.
+ALTER TABLE connected_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payouts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE refunds ENABLE ROW LEVEL SECURITY;
+
 -- ===== Durable rate limiting (used by API routes via service role) =====
 CREATE TABLE IF NOT EXISTS rate_limits (
   key TEXT PRIMARY KEY,

@@ -1,5 +1,6 @@
 import type Stripe from "stripe";
 import { createNotification } from "@/lib/api-helpers";
+import { recordPaymentAndHeldPayout } from "@/lib/payouts";
 import type { createSupabaseAdminClient } from "@/lib/supabase-server";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
@@ -12,6 +13,9 @@ interface RentalRow {
   status: string;
   start_date: string;
   end_date: string;
+  daily_rate: number;
+  number_of_days: number;
+  insurance_fee: number;
   deposit_amount: number;
   deposit_status: string;
   payment_intent_id: string | null;
@@ -96,6 +100,10 @@ export async function finalizeRentalConfirmation(
     .from("items")
     .update({ availability_status: "rented" })
     .eq("id", rental.item_id);
+
+  // Record the payment + a HELD owner payout in the ledger (idempotent).
+  // No transfer happens yet — the payout is released at completion.
+  await recordPaymentAndHeldPayout(admin, stripe, rental);
 
   // Notify the owner once (only when we actually moved it to confirmed).
   if (updated) {

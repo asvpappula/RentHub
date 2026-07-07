@@ -56,18 +56,41 @@ first). Uploads are never performed directly from the browser.
 2. **Developers → API keys**: copy the publishable key →
    `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` and secret key → `STRIPE_SECRET_KEY`.
 3. **Developers → Webhooks → Add endpoint**: `https://<your-app>/api/webhooks/stripe`
-   listening to `payment_intent.succeeded`, `payment_intent.amount_capturable_updated`,
-   `payment_intent.payment_failed`, `charge.refunded`, `charge.dispute.created`,
-   `identity.verification_session.verified`, `identity.verification_session.requires_input`.
-   Copy the signing secret → `STRIPE_WEBHOOK_SECRET`.
+   listening to: `payment_intent.succeeded`, `payment_intent.amount_capturable_updated`,
+   `payment_intent.payment_failed`, `charge.succeeded`, `charge.refunded`,
+   `charge.dispute.created`, `charge.dispute.updated`, `charge.dispute.closed`,
+   `identity.verification_session.verified`, `identity.verification_session.requires_input`,
+   and (Connect) `account.updated`, `transfer.created`, `transfer.reversed`, `payout.failed`.
+   **Enable "Listen to events on Connected accounts"** so `account.updated` /
+   `payout.failed` are delivered. Copy the signing secret → `STRIPE_WEBHOOK_SECRET`.
    For local dev: `stripe listen --forward-to localhost:3000/api/webhooks/stripe`.
 
-   ⚠️ **Required**: the webhook route now rejects all events unless
-   `STRIPE_WEBHOOK_SECRET` is a real signing secret (it fails safe rather than
+   ⚠️ **Required**: the webhook route rejects all events unless
+   `STRIPE_WEBHOOK_SECRET` is a real signing secret (fails safe rather than
    trusting unverified events). Set it before going live.
 
 Test cards: `4242 4242 4242 4242` (success), `4000 0000 0000 0002` (decline),
 `4000 0025 0000 3155` (3-D Secure).
+
+## 6b. Stripe Connect (owner payouts) — Phase 2
+
+Owner payouts ship **behind a flag** (`STRIPE_CONNECT_ENABLED`, default `false`).
+When off, renter payments work normally but funds stay on the platform and the
+owner dashboard shows an honest "payouts launching soon" state — **no fake
+transfers**. To turn payouts on:
+
+1. **Dashboard → Connect → Get started**: enable Connect (choose the platform /
+   marketplace path). Enable **Express** accounts and the **transfers**
+   capability. Set your platform business profile + branding.
+2. Add the Connect webhook events above (with connected-account events enabled).
+3. Set `STRIPE_CONNECT_ENABLED=true` in `.env.local` / Vercel and redeploy.
+4. Owners then onboard at **/owner/payouts** (hosted Stripe Express onboarding);
+   the app collects renter payments, holds the owner payout until the rental
+   completes with no open dispute/claim, then transfers `subtotal − 15%` to the
+   owner's connected account.
+
+Charge model: **separate charges & transfers** (platform charges the renter,
+then transfers to the owner at release) — this is what lets the payout be held.
 
 ## 7. Vercel
 

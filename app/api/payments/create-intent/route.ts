@@ -8,6 +8,8 @@ import {
 } from "@/lib/api-helpers";
 import { paymentIntentSchema } from "@/lib/validation";
 import { getStripeServer } from "@/lib/stripe-server";
+import { connectEnabled } from "@/lib/payments-math";
+import { ownerPayoutReady } from "@/lib/connect";
 
 /**
  * Creates the rental payment intent (rate x days + insurance). The deposit
@@ -30,6 +32,14 @@ export async function POST(request: Request) {
       throw new ApiError("Rental must be approved by the owner first", 409);
     if (!rental.agreement_accepted_at)
       throw new ApiError("Accept the rental agreement before paying", 409);
+
+    // Don't collect renter money we can't pay out: the owner must have
+    // completed payout onboarding (only enforced once Connect is live).
+    if (connectEnabled() && !(await ownerPayoutReady(admin, rental.owner_id)))
+      throw new ApiError(
+        "This owner hasn't finished setting up payouts yet. Please try again later.",
+        409
+      );
 
     // Re-check availability at payment time — another booking for overlapping
     // dates may have been confirmed since this request was approved.

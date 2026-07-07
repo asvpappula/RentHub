@@ -40,6 +40,14 @@ export default function OwnerDashboard() {
   const [rejecting, setRejecting] = useState<Rental | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [togglingItem, setTogglingItem] = useState<number | null>(null);
+  const [payoutState, setPayoutState] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/connect/status")
+      .then((r) => r.json())
+      .then((d) => setPayoutState(d.status?.state ?? null))
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(() => {
     Promise.all([
@@ -195,6 +203,24 @@ export default function OwnerDashboard() {
           </div>
         ))}
       </div>
+
+      {/* Payout onboarding nudge — only when Connect is live and not enabled */}
+      {payoutState && payoutState !== "unavailable" && payoutState !== "enabled" && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary-200 bg-primary-50/60 px-5 py-3">
+          <p className="text-sm text-primary-800">
+            <span className="font-semibold">Set up payouts</span> to receive
+            earnings from your rentals.
+            {payoutState === "restricted" && " Action is required to continue."}
+          </p>
+          <Link href="/owner/payouts">
+            <Button size="sm">
+              {payoutState === "not_started"
+                ? "Set up payouts"
+                : "Continue onboarding"}
+            </Button>
+          </Link>
+        </div>
+      )}
 
       {/* Verification nudge */}
       {user && !user.phone_verified && (
