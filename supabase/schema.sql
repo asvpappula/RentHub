@@ -17,6 +17,10 @@ CREATE TABLE users (
   stripe_verification_session_id VARCHAR(255),
   terms_accepted_at TIMESTAMP,
   is_admin BOOLEAN DEFAULT FALSE,
+  suspended BOOLEAN DEFAULT FALSE,
+  suspended_reason TEXT,
+  suspended_at TIMESTAMPTZ,
+  email_notifications BOOLEAN DEFAULT TRUE,
   average_rating DECIMAL(3,2),
   total_reviews INT DEFAULT 0,
   total_rentals INT DEFAULT 0,
@@ -40,6 +44,7 @@ CREATE TABLE items (
   view_count INT DEFAULT 0,
   rental_count INT DEFAULT 0,
   average_rating DECIMAL(3,2),
+  hidden BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -196,8 +201,32 @@ CREATE TABLE insurance_claims (
   estimated_value INT NOT NULL,
   status VARCHAR(20) DEFAULT 'pending',
   resolution_notes TEXT,
+  resolved_by BIGINT REFERENCES users(id),
   resolved_at TIMESTAMP,
+  approved_amount_cents INT,
   created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- ===== Phase 3: admin operations + transactional email =====
+CREATE TABLE admin_actions (
+  id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  admin_user_id BIGINT NOT NULL REFERENCES users(id),
+  action_type VARCHAR(60) NOT NULL,
+  target_type VARCHAR(40) NOT NULL,
+  target_id VARCHAR(80),
+  reason TEXT,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE email_events (
+  id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  dedupe_key TEXT NOT NULL UNIQUE,
+  recipient VARCHAR(255) NOT NULL,
+  template VARCHAR(60) NOT NULL,
+  status VARCHAR(20) DEFAULT 'sent',
+  error TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Service-role only (RLS enabled with no policies).

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import {
   ApiError,
-  createNotification,
   handleApiError,
   requireUser,
 } from "@/lib/api-helpers";
 import { connectEnabled } from "@/lib/payments-math";
 import { ownerPayoutReady } from "@/lib/connect";
+import { sendTransactional } from "@/lib/email";
 
 export async function POST(
   _request: Request,
@@ -65,14 +65,15 @@ export async function POST(
       throw new ApiError(error.message, 400);
     }
 
-    await createNotification(
-      admin,
-      rental.renter_id,
-      "rental_approved",
-      "Rental request approved",
-      `Your request for "${rental.item?.title}" was approved — complete checkout to confirm.`,
-      rental.id
-    );
+    await sendTransactional(admin, {
+      userId: rental.renter_id,
+      notificationType: "rental_approved",
+      subject: "Rental request approved",
+      body: `Your request for "${rental.item?.title}" was approved — complete checkout to confirm your booking.`,
+      dedupeKey: `rental-${rental.id}-approved`,
+      linkPath: `/checkout/${rental.id}`,
+      relatedRentalId: rental.id,
+    });
 
     return NextResponse.json({ rental: data });
   } catch (err) {

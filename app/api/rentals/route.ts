@@ -5,11 +5,13 @@ import {
   handleApiError,
   parseBody,
   rateLimit,
+  requireActiveUser,
   requireUser,
 } from "@/lib/api-helpers";
 import { createRentalSchema } from "@/lib/validation";
 import { quotePrice } from "@/lib/utils";
 import { checkFraudRisk } from "@/lib/fraud";
+import { sendTransactional } from "@/lib/email";
 
 const RENTAL_SELECT =
   "*, item:items(*, photos:item_photos(*)), renter:users!rentals_renter_id_fkey(id, name, avatar_url, average_rating, id_verified, phone_verified, total_reviews, total_rentals, created_at), owner:users!rentals_owner_id_fkey(id, name, avatar_url, average_rating, id_verified, phone_verified, total_reviews, total_rentals, created_at)";
@@ -38,7 +40,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { user, admin } = await requireUser();
+    const { user, admin } = await requireActiveUser();
     await rateLimit(`rental:${user.id}`, 20);
     const input = await parseBody(request, createRentalSchema);
 
@@ -98,14 +100,15 @@ export async function POST(request: Request) {
       .single();
     if (error) throw new ApiError(error.message, 400);
 
-    await createNotification(
-      admin,
-      item.owner_id,
-      "rental_request",
-      "New rental request",
-      `${user.name ?? "Someone"} wants to rent "${item.title}"`,
-      rental.id
-    );
+    await sendTransactional(admin, {
+      userId: item.owner_id,
+      notificationType: "rental_request",
+      subject: "New rental request",
+      body: `${user.name ?? "Someone"} wants to rent "${item.title}". Review it in your owner dashboard.`,
+      dedupeKey: `rental-${rental.id}-requested`,
+      linkPath: `/rental/${rental.id}`,
+      relatedRentalId: rental.id,
+    });
 
     return NextResponse.json({ rental }, { status: 201 });
   } catch (err) {

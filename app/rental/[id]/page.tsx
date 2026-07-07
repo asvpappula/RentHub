@@ -468,7 +468,7 @@ export default function RentalDetailPage({
                 onClick={() => setClaimOpen(true)}
               >
                 <FiShield className="h-4 w-4 text-secondary-500" />
-                File insurance claim
+                File protection claim
               </Button>
             )}
 
@@ -526,11 +526,11 @@ export default function RentalDetailPage({
         </div>
       </div>
 
-      {/* Insurance claim modal */}
+      {/* Protection claim modal */}
       <Modal
         open={claimOpen}
         onClose={() => setClaimOpen(false)}
-        title="File an insurance claim"
+        title="File a protection claim"
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setClaimOpen(false)}>
@@ -543,9 +543,9 @@ export default function RentalDetailPage({
         }
       >
         <p className="text-sm text-slate-500">
-          Coverage: accidental damage, theft, and loss up to $500 per rental.
-          Claims are reviewed by RentHub within 3 business days — attach photos
-          and receipts where possible.
+          RentHub damage protection covers accidental damage, theft, and loss
+          up to $500 per rental, subject to review. Claims are reviewed by the
+          RentHub team — attach photos and receipts where possible.
         </p>
         <div className="mt-4 space-y-4">
           <Select
@@ -674,7 +674,7 @@ export default function RentalDetailPage({
       >
         <p className="text-sm text-slate-500">
           {disputeOpen === "theft"
-            ? "If the item was not returned or was stolen, describe what happened. For theft we recommend also filing a police report — the insurance claim will need it."
+            ? "If the item was not returned or was stolen, describe what happened. For theft we recommend also filing a police report — the protection claim review will need it."
             : "Describe the damage. Include when you noticed it and photos if possible (you can attach them in messages)."}
         </p>
         <div className="mt-4">

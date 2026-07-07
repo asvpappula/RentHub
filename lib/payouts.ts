@@ -2,6 +2,7 @@ import type Stripe from "stripe";
 import { createNotification } from "@/lib/api-helpers";
 import { computeRentalAmounts, connectEnabled } from "@/lib/payments-math";
 import { ownerPayoutReady } from "@/lib/connect";
+import { sendTransactional } from "@/lib/email";
 import type { createSupabaseAdminClient } from "@/lib/supabase-server";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
@@ -164,6 +165,14 @@ export async function releaseOwnerPayout(
   if (rentalStatus !== "completed")
     return { released: false, reason: `rental_not_completed_${rentalStatus}` };
 
+  // A suspended owner must not receive payouts.
+  const { data: owner } = await admin
+    .from("users")
+    .select("suspended")
+    .eq("id", payout.owner_id)
+    .maybeSingle();
+  if (owner?.suspended) return { released: false, reason: "owner_suspended" };
+
   if (!connectEnabled())
     return { released: false, reason: "connect_disabled" };
 
@@ -230,14 +239,15 @@ export async function releaseOwnerPayout(
     })
     .eq("id", payout.id);
 
-  await createNotification(
-    admin,
-    payout.owner_id,
-    "rental_completed",
-    "Payout sent",
-    `Your $${(payout.amount_cents / 100).toFixed(2)} payout for "${itemTitle}" is on its way to your bank.`,
-    rentalId
-  );
+  await sendTransactional(admin, {
+    userId: payout.owner_id,
+    notificationType: "rental_completed",
+    subject: "Payout sent",
+    body: `Your $${(payout.amount_cents / 100).toFixed(2)} payout for "${itemTitle}" is on its way to your bank.`,
+    dedupeKey: `payout-${rentalId}-sent`,
+    linkPath: `/owner/dashboard`,
+    relatedRentalId: rentalId,
+  });
 
   return { released: true, transferId: transfer.id };
 }

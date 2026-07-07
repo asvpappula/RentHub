@@ -32,10 +32,10 @@ const CONFIG: Record<
   },
   insurance: {
     icon: <FiShield className="h-3 w-3" />,
-    label: "Insured",
+    label: "Protected",
     className: "bg-secondary-50 text-secondary-700 ring-secondary-200",
     explainer:
-      "Accidental damage during the rental is covered by RentHub insurance (5% fee at checkout).",
+      "Accidental damage during the rental is covered by RentHub damage protection, subject to review (5% fee at checkout).",
   },
   deposit: {
     icon: <FiLock className="h-3 w-3" />,

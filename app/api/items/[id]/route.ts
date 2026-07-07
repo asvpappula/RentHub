@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   ApiError,
+  getOptionalUser,
   handleApiError,
   parseBody,
   requireUser,
@@ -25,6 +26,13 @@ export async function GET(
       .eq("id", itemId)
       .single();
     if (!data) throw new ApiError("Item not found", 404);
+
+    // Hidden (moderated) listings are visible only to their owner or an admin.
+    if (data.hidden) {
+      const viewer = await getOptionalUser();
+      if (!viewer || (viewer.id !== data.owner_id && !viewer.is_admin))
+        throw new ApiError("Item not found", 404);
+    }
 
     // Fire-and-forget view counter.
     admin

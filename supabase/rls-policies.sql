@@ -125,9 +125,16 @@ CREATE TABLE IF NOT EXISTS webhook_events (
   type TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'processing',
   error TEXT,
-  received_at TIMESTAMPTZ DEFAULT now()
+  received_at TIMESTAMPTZ DEFAULT now(),
+  reviewed_at TIMESTAMPTZ
 );
 ALTER TABLE webhook_events ENABLE ROW LEVEL SECURITY;
+
+-- ===== Phase 3: admin operations + email — service-role only (deny-all) =====
+-- admin_actions and email_events are enabled in schema.sql; enforce deny-all
+-- here in case schema.sql predates them.
+ALTER TABLE admin_actions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE email_events ENABLE ROW LEVEL SECURITY;
 
 -- ===== Database-level double-booking guard =====
 -- No two approved/confirmed/active rentals for the same item may overlap.

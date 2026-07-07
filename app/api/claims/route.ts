@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
   ApiError,
-  createNotification,
   handleApiError,
   parseBody,
   rateLimit,
   requireUser,
 } from "@/lib/api-helpers";
 import { signEvidenceUrls } from "@/lib/evidence";
+import { sendTransactional } from "@/lib/email";
 
 const COVERAGE_LIMIT = 500;
 
@@ -96,14 +96,15 @@ export async function POST(request: Request) {
 
     const otherParty =
       rental.renter_id === user.id ? rental.owner_id : rental.renter_id;
-    await createNotification(
-      admin,
-      otherParty,
-      "dispute",
-      "Insurance claim filed",
-      `${user.name ?? "The other party"} filed a $${input.estimated_value} ${input.claim_type} claim on "${rental.item?.title}". RentHub will review it.`,
-      input.rental_id
-    );
+    await sendTransactional(admin, {
+      userId: otherParty,
+      notificationType: "dispute",
+      subject: "Damage-protection claim filed",
+      body: `${user.name ?? "The other party"} filed a $${input.estimated_value} ${input.claim_type} claim on "${rental.item?.title}". RentHub will review it.`,
+      dedupeKey: `claim-${claim.id}-opened`,
+      linkPath: `/rental/${input.rental_id}`,
+      relatedRentalId: input.rental_id,
+    });
 
     return NextResponse.json({ claim }, { status: 201 });
   } catch (err) {

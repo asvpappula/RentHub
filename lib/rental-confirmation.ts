@@ -1,6 +1,7 @@
 import type Stripe from "stripe";
 import { createNotification } from "@/lib/api-helpers";
 import { recordPaymentAndHeldPayout } from "@/lib/payouts";
+import { sendTransactional } from "@/lib/email";
 import type { createSupabaseAdminClient } from "@/lib/supabase-server";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
@@ -105,16 +106,18 @@ export async function finalizeRentalConfirmation(
   // No transfer happens yet — the payout is released at completion.
   await recordPaymentAndHeldPayout(admin, stripe, rental);
 
-  // Notify the owner once (only when we actually moved it to confirmed).
+  // Notify + email the owner once (only when we actually moved it to
+  // confirmed). Stable dedupe key → confirm route + webhook never double-send.
   if (updated) {
-    await createNotification(
-      admin,
-      rental.owner_id,
-      "rental_confirmed",
-      "Booking confirmed",
-      `"${rental.item?.title ?? "Your item"}" was booked and paid for.`,
-      rental.id
-    );
+    await sendTransactional(admin, {
+      userId: rental.owner_id,
+      notificationType: "rental_confirmed",
+      subject: "Booking confirmed",
+      body: `"${rental.item?.title ?? "Your item"}" was booked and paid for. Coordinate pickup with the renter in messages.`,
+      dedupeKey: `rental-${rental.id}-confirmed`,
+      linkPath: `/rental/${rental.id}`,
+      relatedRentalId: rental.id,
+    });
   }
 
   return { confirmed: true };

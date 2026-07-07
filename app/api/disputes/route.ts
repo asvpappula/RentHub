@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import {
   ApiError,
-  createNotification,
   handleApiError,
   parseBody,
   rateLimit,
   requireUser,
 } from "@/lib/api-helpers";
 import { createDisputeSchema } from "@/lib/validation";
+import { sendTransactional } from "@/lib/email";
 
 const DISPUTE_SELECT =
   "*, reporter:users!disputes_reported_by_fkey(id, name, avatar_url), rental:rentals(id, renter_id, owner_id, deposit_amount, deposit_status, status, item:items(id, title))";
@@ -67,14 +67,15 @@ export async function POST(request: Request) {
 
     const otherParty =
       rental.renter_id === user.id ? rental.owner_id : rental.renter_id;
-    await createNotification(
-      admin,
-      otherParty,
-      "dispute",
-      `${input.dispute_type === "theft" ? "Theft" : input.dispute_type === "damage" ? "Damage" : "Issue"} reported`,
-      `A dispute was opened on the rental of "${rental.item?.title}".`,
-      input.rental_id
-    );
+    await sendTransactional(admin, {
+      userId: otherParty,
+      notificationType: "dispute",
+      subject: `${input.dispute_type === "theft" ? "Theft" : input.dispute_type === "damage" ? "Damage" : "Issue"} reported on your rental`,
+      body: `A dispute was opened on the rental of "${rental.item?.title}". Respond with your side and any evidence from the rental page.`,
+      dedupeKey: `dispute-${dispute.id}-opened`,
+      linkPath: `/disputes/${dispute.id}`,
+      relatedRentalId: input.rental_id,
+    });
 
     return NextResponse.json({ dispute }, { status: 201 });
   } catch (err) {

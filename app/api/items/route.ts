@@ -3,7 +3,7 @@ import {
   ApiError,
   handleApiError,
   parseBody,
-  requireUser,
+  requireActiveUser,
 } from "@/lib/api-helpers";
 import { createItemSchema } from "@/lib/validation";
 import { createSupabaseAdminClient } from "@/lib/supabase-server";
@@ -35,7 +35,11 @@ export async function GET(request: Request) {
         { count: "exact" }
       );
 
-    if (!ownerId) query = query.eq("availability_status", "available");
+    // Public browse: only available, non-hidden listings. Owners viewing their
+    // own listings (ownerId filter) still see hidden ones (marked in the UI).
+    if (!ownerId) {
+      query = query.eq("availability_status", "available").eq("hidden", false);
+    }
     if (search) query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
     if (category) query = query.eq("category", category);
     if (minPrice) query = query.gte("daily_rate", Number(minPrice));
@@ -76,7 +80,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { user, admin } = await requireUser();
+    const { user, admin } = await requireActiveUser();
     const input = await parseBody(request, createItemSchema);
 
     const { riskLevel } = await checkFraudRisk(admin, user);

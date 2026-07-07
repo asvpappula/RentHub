@@ -9,6 +9,9 @@ const PROTECTED_PREFIXES = [
   "/checkout",
   "/messages",
   "/settings",
+  "/disputes",
+  "/claims",
+  "/admin",
 ];
 
 export async function proxy(request: NextRequest) {

@@ -5,6 +5,7 @@ import {
   handleApiError,
   parseBody,
   rateLimit,
+  requireActiveUser,
   requireUser,
 } from "@/lib/api-helpers";
 import { sendMessageSchema } from "@/lib/validation";
@@ -55,7 +56,7 @@ export async function GET() {
 /** POST /api/messages — send a message. */
 export async function POST(request: Request) {
   try {
-    const { user, admin } = await requireUser();
+    const { user, admin } = await requireActiveUser();
     await rateLimit(`msg:${user.id}`, 60);
     const input = await parseBody(request, sendMessageSchema);
 

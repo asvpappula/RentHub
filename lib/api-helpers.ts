@@ -41,6 +41,48 @@ export async function requireUser(): Promise<{
   return { user: profile as User, admin };
 }
 
+/**
+ * Best-effort current user for public routes that need to branch on identity
+ * (e.g. show a hidden listing to its owner/admin). Returns null when there is
+ * no session — never throws.
+ */
+export async function getOptionalUser(): Promise<User | null> {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user: authUser },
+    } = await supabase.auth.getUser();
+    if (!authUser) return null;
+    const admin = createSupabaseAdminClient();
+    const { data: profile } = await admin
+      .from("users")
+      .select("*")
+      .eq("auth_id", authUser.id)
+      .single();
+    return (profile as User) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Like requireUser(), but rejects suspended accounts — use on write actions
+ * (listing, renting, messaging) that a suspended user must not perform.
+ * Reads still use requireUser() so a suspended user can see their account.
+ */
+export async function requireActiveUser(): Promise<{
+  user: User;
+  admin: ReturnType<typeof createSupabaseAdminClient>;
+}> {
+  const { user, admin } = await requireUser();
+  if (user.suspended)
+    throw new ApiError(
+      "Your account is suspended. Contact support if you think this is a mistake.",
+      403
+    );
+  return { user, admin };
+}
+
 export async function parseBody<T>(request: Request, schema: ZodType<T>): Promise<T> {
   let raw: unknown;
   try {

@@ -28,10 +28,12 @@ export default function ClaimsPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-      <h1 className="text-2xl font-bold text-slate-900">Insurance claims</h1>
+      <h1 className="text-2xl font-bold text-slate-900">Protection claims</h1>
       <p className="mt-1 text-sm text-slate-500">
-        Every rental includes coverage for accidental damage, theft, and loss
-        up to $500. Claims are reviewed by RentHub within 3 business days.
+        RentHub damage protection covers accidental damage, theft, and loss up
+        to $500 per rental, subject to review. Claims are reviewed by the
+        RentHub team; approved compensation is applied through the rental
+        deposit. This is platform protection, not a guaranteed insurance policy.
       </p>
 
       <div className="mt-5 space-y-3">

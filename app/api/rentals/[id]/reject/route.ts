@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import {
   ApiError,
-  createNotification,
   handleApiError,
   requireUser,
 } from "@/lib/api-helpers";
+import { sendTransactional } from "@/lib/email";
 
 export async function POST(
   request: Request,
@@ -37,14 +37,15 @@ export async function POST(
       .single();
     if (error) throw new ApiError(error.message, 400);
 
-    await createNotification(
-      admin,
-      rental.renter_id,
-      "rental_rejected",
-      "Rental request declined",
-      `Your request for "${rental.item?.title}" was declined by the owner.${reason ? ` Reason: ${reason}` : ""}`,
-      rental.id
-    );
+    await sendTransactional(admin, {
+      userId: rental.renter_id,
+      notificationType: "rental_rejected",
+      subject: "Rental request declined",
+      body: `Your request for "${rental.item?.title}" was declined by the owner.${reason ? ` Reason: ${reason}` : ""}`,
+      dedupeKey: `rental-${rental.id}-rejected`,
+      linkPath: `/browse`,
+      relatedRentalId: rental.id,
+    });
 
     return NextResponse.json({ rental: data });
   } catch (err) {

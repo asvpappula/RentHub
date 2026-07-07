@@ -12,6 +12,9 @@ export interface User {
   stripe_verification_session_id?: string | null;
   terms_accepted_at?: string | null;
   is_admin?: boolean;
+  suspended?: boolean;
+  suspended_reason?: string | null;
+  email_notifications?: boolean;
   average_rating: number | null;
   total_reviews: number;
   total_rentals: number;
