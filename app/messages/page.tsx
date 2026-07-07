@@ -28,6 +28,7 @@ import {
   FiCalendar,
 } from "react-icons/fi";
 import type { Conversation, Rental, User } from "@/types";
+import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMessages } from "@/hooks/useMessages";
 import { usePresence } from "@/hooks/usePresence";
@@ -38,9 +39,10 @@ import Skeleton from "@/components/ui/Skeleton";
 import EmptyState from "@/components/EmptyState";
 
 // Survives navigation within the session — the list renders instantly
-// on return and refreshes in the background.
-let conversationsCache: Conversation[] | null = null;
-let rentalsCache: Rental[] | null = null;
+// on return and refreshes in the background. Keyed by account id so
+// switching logins never shows another account's conversations.
+const conversationsCache = new Map<number, Conversation[]>();
+const rentalsCache = new Map<number, Rental[]>();
 
 function bubbleTime(iso: string) {
   return format(parseISO(iso), "h:mm a");
@@ -60,11 +62,9 @@ function MessagesContent() {
   const initialUserId = searchParams.get("user");
   const online = usePresence();
 
-  const [conversations, setConversations] = useState<Conversation[]>(
-    () => conversationsCache ?? []
-  );
-  const [loadingConvos, setLoadingConvos] = useState(conversationsCache === null);
-  const [rentals, setRentals] = useState<Rental[]>(() => rentalsCache ?? []);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [loadingConvos, setLoadingConvos] = useState(true);
+  const [rentals, setRentals] = useState<Rental[]>([]);
   const [activeUserId, setActiveUserId] = useState<number | null>(
     initialUserId ? Number(initialUserId) : null
   );
@@ -89,22 +89,69 @@ function MessagesContent() {
   const lastMessageId = useRef<number | null>(null);
 
   const loadConversations = useCallback(() => {
+    if (!user) return;
+    const uid = user.id;
     fetch("/api/messages")
       .then((r) => r.json())
       .then((data) => {
-        conversationsCache = data.conversations ?? [];
-        setConversations(conversationsCache ?? []);
+        conversationsCache.set(uid, data.conversations ?? []);
+        setConversations(data.conversations ?? []);
       })
       .finally(() => setLoadingConvos(false));
     fetch("/api/rentals")
       .then((r) => r.json())
       .then((data) => {
-        rentalsCache = data.rentals ?? [];
-        setRentals(rentalsCache ?? []);
+        rentalsCache.set(uid, data.rentals ?? []);
+        setRentals(data.rentals ?? []);
       });
-  }, []);
+  }, [user]);
 
-  useEffect(loadConversations, [loadConversations]);
+  // Initial load: instant from this account's cache, refresh in background.
+  useEffect(() => {
+    if (!user) return;
+    const cachedConvos = conversationsCache.get(user.id);
+    if (cachedConvos) {
+      setConversations(cachedConvos);
+      setLoadingConvos(false);
+    } else {
+      setConversations([]);
+      setLoadingConvos(true);
+    }
+    setRentals(rentalsCache.get(user.id) ?? []);
+    loadConversations();
+  }, [user, loadConversations]);
+
+  // Live conversation list: any message touching me (new conversations,
+  // new previews, read receipts) refreshes the list in real time.
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`msg-list:${user.id}:${Math.random().toString(36).slice(2)}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `recipient_id=eq.${user.id}`,
+        },
+        loadConversations
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "messages",
+          filter: `sender_id=eq.${user.id}`,
+        },
+        loadConversations
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, loadConversations]);
 
   // Resolve the counterpart's profile when deep-linked (?user=N).
   useEffect(() => {

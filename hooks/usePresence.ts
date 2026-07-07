@@ -5,35 +5,55 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 
 /**
- * Tracks which users are currently online via a shared Supabase presence
- * channel. Returns the set of online user ids (including your own).
+ * Singleton presence channel per logged-in user. Presence requires a shared
+ * topic, and re-subscribing the same topic on remount races the previous
+ * teardown — so the channel lives for the session (torn down only when the
+ * account changes) and hook instances just register listeners.
  */
+let presenceUserId: number | null = null;
+let presenceChannel: ReturnType<typeof supabase.channel> | null = null;
+let currentOnline = new Set<number>();
+const presenceListeners = new Set<(online: Set<number>) => void>();
+
+function ensurePresence(userId: number) {
+  if (presenceChannel && presenceUserId === userId) return;
+  if (presenceChannel) {
+    supabase.removeChannel(presenceChannel);
+    presenceChannel = null;
+  }
+  presenceUserId = userId;
+  const channel = supabase.channel("online-users", {
+    config: { presence: { key: String(userId) } },
+  });
+  presenceChannel = channel;
+  channel
+    .on("presence", { event: "sync" }, () => {
+      currentOnline = new Set(Object.keys(channel.presenceState()).map(Number));
+      presenceListeners.forEach((l) => l(currentOnline));
+    })
+    .subscribe(async (status) => {
+      if (status === "SUBSCRIBED") {
+        await channel.track({ online_at: new Date().toISOString() });
+      }
+    });
+}
+
+/** Returns the set of online user ids (including your own). */
 export function usePresence(): Set<number> {
   const { user } = useAuth();
-  const [online, setOnline] = useState<Set<number>>(new Set());
+  const [online, setOnline] = useState<Set<number>>(currentOnline);
 
   useEffect(() => {
     if (!user) {
       setOnline(new Set());
       return;
     }
-
-    const channel = supabase.channel("online-users", {
-      config: { presence: { key: String(user.id) } },
-    });
-
-    channel
-      .on("presence", { event: "sync" }, () => {
-        setOnline(new Set(Object.keys(channel.presenceState()).map(Number)));
-      })
-      .subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
-          await channel.track({ online_at: new Date().toISOString() });
-        }
-      });
-
+    ensurePresence(user.id);
+    setOnline(currentOnline);
+    const listener = (next: Set<number>) => setOnline(new Set(next));
+    presenceListeners.add(listener);
     return () => {
-      supabase.removeChannel(channel);
+      presenceListeners.delete(listener);
     };
   }, [user]);
 
