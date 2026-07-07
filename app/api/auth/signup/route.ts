@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { handleApiError, parseBody, rateLimit } from "@/lib/api-helpers";
 import { signupSchema } from "@/lib/validation";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
+import {
+  createSupabaseAdminClient,
+  createSupabaseServerClient,
+} from "@/lib/supabase-server";
 
 export async function POST(request: Request) {
   try {
@@ -18,6 +21,13 @@ export async function POST(request: Request) {
       },
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+    // Record Terms acceptance on the profile row (created by the signup trigger).
+    const admin = createSupabaseAdminClient();
+    await admin
+      .from("users")
+      .update({ terms_accepted_at: new Date().toISOString() })
+      .eq("email", email);
 
     return NextResponse.json(
       { user: data.user, needsEmailVerification: !data.session },

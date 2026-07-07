@@ -193,16 +193,22 @@ export default function SettingsPage() {
             </li>
           ))}
         </ul>
-        {!user.phone_verified && (
-          <Link href="/settings/verify-phone" className="mt-4 inline-block">
-            <Button size="sm" variant="secondary">
-              Verify phone number (+25 trust)
-            </Button>
-          </Link>
-        )}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {!user.phone_verified && (
+            <Link href="/settings/verify-phone">
+              <Button size="sm" variant="secondary">
+                Verify phone number (+25 trust)
+              </Button>
+            </Link>
+          )}
+          {!user.id_verified && (
+            <Link href="/settings/verify-id">
+              <Button size="sm">Verify government ID (+30 trust)</Button>
+            </Link>
+          )}
+        </div>
         <p className="mt-3 text-xs text-slate-400">
-          ID and background verification are coming soon (Stripe Identity and
-          Checkr integrations).
+          Background checks are coming soon (Checkr integration).
         </p>
       </section>
 
@@ -260,6 +266,14 @@ export default function SettingsPage() {
         >
           Send password reset email
         </Button>
+        <p className="mt-4 text-xs text-slate-400">
+          {user.terms_accepted_at
+            ? `You accepted the Terms of Service on ${new Date(user.terms_accepted_at).toLocaleDateString()}. `
+            : ""}
+          <Link href="/terms" className="font-semibold text-primary-600 hover:underline">
+            Read the Terms of Service
+          </Link>
+        </p>
       </section>
     </div>
   );

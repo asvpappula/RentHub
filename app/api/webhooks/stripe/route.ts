@@ -97,6 +97,44 @@ export async function POST(request: Request) {
         break;
       }
 
+      case "identity.verification_session.verified": {
+        const session = event.data.object;
+        const userId = Number(session.metadata?.renthub_user_id);
+        if (userId) {
+          const { data: updated } = await admin
+            .from("users")
+            .update({ id_verified: true, id_verified_at: new Date().toISOString() })
+            .eq("id", userId)
+            .eq("id_verified", false)
+            .select("id");
+          if (updated && updated.length > 0) {
+            await createNotification(
+              admin,
+              userId,
+              "message",
+              "Government ID verified ✓",
+              "Your trust score went up by 30 points. You're now a fully verified member."
+            );
+          }
+        }
+        break;
+      }
+
+      case "identity.verification_session.requires_input": {
+        const session = event.data.object;
+        const userId = Number(session.metadata?.renthub_user_id);
+        if (userId) {
+          await createNotification(
+            admin,
+            userId,
+            "message",
+            "ID verification needs attention",
+            `Verification didn't complete${session.last_error?.reason ? `: ${session.last_error.reason}` : ""}. You can try again from Settings.`
+          );
+        }
+        break;
+      }
+
       case "charge.refunded": {
         const charge = event.data.object;
         const intentId =

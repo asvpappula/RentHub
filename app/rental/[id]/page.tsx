@@ -13,6 +13,7 @@ import {
   FiUnlock,
   FiX,
   FiCamera,
+  FiShield,
 } from "react-icons/fi";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRentalUpdates } from "@/hooks/useRentalUpdates";
@@ -25,7 +26,7 @@ import Skeleton from "@/components/ui/Skeleton";
 import Modal from "@/components/ui/Modal";
 import RatingStars from "@/components/RatingStars";
 import PriceBreakdown from "@/components/PriceBreakdown";
-import { Textarea } from "@/components/ui/Input";
+import { Input, Select, Textarea } from "@/components/ui/Input";
 
 export default function RentalDetailPage({
   params,
@@ -41,6 +42,11 @@ export default function RentalDetailPage({
   const [disputeOpen, setDisputeOpen] = useState<null | "damage" | "theft">(null);
   const [disputeText, setDisputeText] = useState("");
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
+  const [claimOpen, setClaimOpen] = useState(false);
+  const [claimType, setClaimType] = useState<"damage" | "theft" | "loss">("damage");
+  const [claimText, setClaimText] = useState("");
+  const [claimValue, setClaimValue] = useState("");
+  const [claimFiles, setClaimFiles] = useState<File[]>([]);
   const [completeOpen, setCompleteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [myRating, setMyRating] = useState(0);
@@ -183,6 +189,50 @@ export default function RentalDetailPage({
       router.push(`/disputes/${data.dispute.id}`);
     } catch (err) {
       toast("error", err instanceof Error ? err.message : "Could not file report");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitClaim = async () => {
+    const value = Number(claimValue);
+    if (claimText.trim().length < 10 || !value || value < 1 || value > 500) {
+      toast("warning", "Add a description (10+ chars) and a value between $1 and $500.");
+      return;
+    }
+    setBusy(true);
+    try {
+      let photoUrls: string[] = [];
+      if (claimFiles.length > 0) {
+        const form = new FormData();
+        claimFiles.forEach((f) => form.append("files", f));
+        const uploadRes = await fetch("/api/disputes/evidence", {
+          method: "POST",
+          body: form,
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(uploadData.error ?? "Photo upload failed");
+        photoUrls = uploadData.urls;
+      }
+
+      const res = await fetch("/api/claims", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rental_id: rental.id,
+          claim_type: claimType,
+          description: claimText.trim(),
+          photo_urls: photoUrls,
+          estimated_value: value,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not file claim");
+      toast("success", "Claim filed — RentHub will review it within 3 business days.");
+      setClaimOpen(false);
+      router.push("/claims");
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Could not file claim");
     } finally {
       setBusy(false);
     }
@@ -418,6 +468,23 @@ export default function RentalDetailPage({
               </>
             )}
 
+            {["active", "completed", "disputed"].includes(rental.status) && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setClaimOpen(true)}
+              >
+                <FiShield className="h-4 w-4 text-secondary-500" />
+                File insurance claim
+              </Button>
+            )}
+
+            <Link href={`/rental/${rental.id}/agreement`} className="block">
+              <Button variant="ghost" className="w-full">
+                View rental agreement
+              </Button>
+            </Link>
+
             {isRenter && ["pending", "approved"].includes(rental.status) && (
               <Button
                 variant="ghost"
@@ -465,6 +532,100 @@ export default function RentalDetailPage({
           )}
         </div>
       </div>
+
+      {/* Insurance claim modal */}
+      <Modal
+        open={claimOpen}
+        onClose={() => setClaimOpen(false)}
+        title="File an insurance claim"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setClaimOpen(false)}>
+              Cancel
+            </Button>
+            <Button loading={busy} onClick={submitClaim}>
+              File claim
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-sm text-slate-500">
+          Coverage: accidental damage, theft, and loss up to $500 per rental.
+          Claims are reviewed by RentHub within 3 business days — attach photos
+          and receipts where possible.
+        </p>
+        <div className="mt-4 space-y-4">
+          <Select
+            label="What happened?"
+            value={claimType}
+            onChange={(e) => setClaimType(e.target.value as typeof claimType)}
+          >
+            <option value="damage">Damage</option>
+            <option value="theft">Theft</option>
+            <option value="loss">Loss</option>
+          </Select>
+          <Textarea
+            label="Description"
+            value={claimText}
+            onChange={(e) => setClaimText(e.target.value)}
+            placeholder="What happened, when, and what it will cost to repair/replace…"
+          />
+          <Input
+            label="Claim amount ($)"
+            type="number"
+            min={1}
+            max={500}
+            value={claimValue}
+            onChange={(e) => setClaimValue(e.target.value)}
+            hint="Capped at $500 per rental"
+          />
+          <div>
+            <p className="text-sm font-medium text-slate-700">
+              Evidence photos (up to 5)
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {claimFiles.map((f, i) => (
+                <div key={i} className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={URL.createObjectURL(f)}
+                    alt={f.name}
+                    className="h-16 w-16 rounded-lg object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setClaimFiles((prev) => prev.filter((_, j) => j !== i))
+                    }
+                    className="absolute -right-1.5 -top-1.5 rounded-full bg-slate-900/80 p-1 text-white"
+                    aria-label="Remove photo"
+                  >
+                    <FiX className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+              {claimFiles.length < 5 && (
+                <label className="flex h-16 w-16 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-slate-400 hover:border-primary-300 hover:text-primary-500">
+                  <FiCamera className="h-5 w-5" />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      const list = e.target.files;
+                      if (list)
+                        setClaimFiles((prev) =>
+                          [...prev, ...Array.from(list)].slice(0, 5)
+                        );
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+          </div>
+        </div>
+      </Modal>
 
       {/* Owner completion modal */}
       <Modal

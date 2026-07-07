@@ -8,6 +8,9 @@ export interface User {
   phone_number: string | null;
   phone_verified: boolean;
   id_verified: boolean;
+  id_verified_at?: string | null;
+  stripe_verification_session_id?: string | null;
+  terms_accepted_at?: string | null;
   background_check_status: "pending" | "approved" | "rejected";
   average_rating: number | null;
   total_reviews: number;
@@ -77,6 +80,7 @@ export interface Rental {
   total_cost: number;
   payment_intent_id: string | null;
   deposit_status: DepositStatus;
+  agreement_accepted_at?: string | null;
   renter_rating: number | null;
   owner_rating: number | null;
   created_at: string;
@@ -143,6 +147,24 @@ export interface Dispute {
   resolved_at: string | null;
   created_at: string;
   reporter?: User;
+  rental?: Rental;
+}
+
+export type ClaimType = "damage" | "theft" | "loss";
+
+export interface InsuranceClaim {
+  id: number;
+  rental_id: number;
+  claimant_id: number;
+  claim_type: ClaimType;
+  description: string;
+  photo_urls: string[];
+  estimated_value: number;
+  status: "pending" | "approved" | "rejected";
+  resolution_notes: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  claimant?: User;
   rental?: Rental;
 }
 

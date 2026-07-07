@@ -242,6 +242,9 @@ export default function DisputeDetailPage({
             Appeal this resolution
           </Button>
         )}
+        <Link href={`/rental/${rental?.id}/agreement`}>
+          <Button variant="ghost">View rental agreement</Button>
+        </Link>
         <Link href={`/messages?user=${isOwner ? rental?.renter_id : rental?.owner_id}`}>
           <Button variant="ghost">Discuss in messages</Button>
         </Link>

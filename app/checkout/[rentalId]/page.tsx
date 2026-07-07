@@ -40,6 +40,15 @@ export default function CheckoutPage({
     setPreparing(true);
     setPaymentError(null);
     try {
+      // Digital signature: record agreement acceptance before payment.
+      const agreeRes = await fetch(`/api/rentals/${rentalId}/accept-agreement`, {
+        method: "POST",
+      });
+      if (!agreeRes.ok) {
+        const agreeData = await agreeRes.json().catch(() => ({}));
+        throw new Error(agreeData.error ?? "Could not record agreement acceptance");
+      }
+
       const res = await fetch("/api/payments/create-intent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -212,8 +221,23 @@ export default function CheckoutPage({
               className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-emerald-500"
             />
             <span>
-              I agree to the rental terms, the owner&apos;s item rules, and the
-              deposit &amp; insurance policy.
+              I agree to the{" "}
+              <Link
+                href={`/rental/${rentalId}/agreement`}
+                target="_blank"
+                className="font-semibold text-primary-600 hover:underline"
+              >
+                Rental Agreement
+              </Link>{" "}
+              (deposit, insurance, and return terms) and the{" "}
+              <Link
+                href="/terms"
+                target="_blank"
+                className="font-semibold text-primary-600 hover:underline"
+              >
+                Terms of Service
+              </Link>
+              . This acts as my digital signature.
             </span>
           </label>
           {paymentError && (

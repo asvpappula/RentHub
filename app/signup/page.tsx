@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/Input";
 type FormValues = z.infer<typeof signupSchema>;
 
 export default function SignupPage() {
-  const { signUp, signInWithGoogle } = useAuth();
+  const { signInWithGoogle } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
@@ -30,7 +30,15 @@ export default function SignupPage() {
   const onSubmit = async (values: FormValues) => {
     setSubmitting(true);
     try {
-      await signUp(values.name, values.email, values.password);
+      // Goes through the API route (not the client SDK) so Terms
+      // acceptance is recorded server-side alongside the account.
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not create your account.");
       toast("success", "Account created! Check your email to verify.");
       router.push(`/verify-email?email=${encodeURIComponent(values.email)}`);
     } catch (err) {
@@ -74,6 +82,28 @@ export default function SignupPage() {
             error={errors.password?.message}
             {...register("password")}
           />
+          <div>
+            <label className="flex items-start gap-2.5 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-emerald-500"
+                {...register("terms")}
+              />
+              <span>
+                I agree to the{" "}
+                <Link
+                  href="/terms"
+                  target="_blank"
+                  className="font-semibold text-primary-600 hover:underline"
+                >
+                  Terms of Service
+                </Link>
+              </span>
+            </label>
+            {errors.terms && (
+              <p className="mt-1 text-xs text-rose-600">{errors.terms.message}</p>
+            )}
+          </div>
           <Button type="submit" loading={submitting} className="w-full">
             Sign up
           </Button>

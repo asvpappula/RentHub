@@ -26,6 +26,8 @@ export async function POST(request: Request) {
     if (rental.renter_id !== user.id) throw new ApiError("Forbidden", 403);
     if (rental.status !== "approved")
       throw new ApiError("Rental must be approved by the owner first", 409);
+    if (!rental.agreement_accepted_at)
+      throw new ApiError("Accept the rental agreement before paying", 409);
 
     // Amount computed server-side — never trust the client.
     const amountCents =

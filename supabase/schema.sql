@@ -13,6 +13,9 @@ CREATE TABLE users (
   phone_number VARCHAR(20),
   phone_verified BOOLEAN DEFAULT FALSE,
   id_verified BOOLEAN DEFAULT FALSE,
+  id_verified_at TIMESTAMP,
+  stripe_verification_session_id VARCHAR(255),
+  terms_accepted_at TIMESTAMP,
   background_check_status VARCHAR(50) DEFAULT 'pending',
   average_rating DECIMAL(3,2),
   total_reviews INT DEFAULT 0,
@@ -65,6 +68,7 @@ CREATE TABLE rentals (
   payment_intent_id VARCHAR(255),
   deposit_payment_intent_id VARCHAR(255),
   deposit_status VARCHAR(50) DEFAULT 'pending',
+  agreement_accepted_at TIMESTAMP,
   renter_rating INT,
   owner_rating INT,
   created_at TIMESTAMP DEFAULT NOW(),
@@ -115,6 +119,20 @@ CREATE TABLE saved_items (
   UNIQUE (user_id, item_id)
 );
 
+CREATE TABLE insurance_claims (
+  id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  rental_id BIGINT NOT NULL REFERENCES rentals(id),
+  claimant_id BIGINT NOT NULL REFERENCES users(id),
+  claim_type VARCHAR(20) NOT NULL,
+  description TEXT NOT NULL,
+  photo_urls TEXT[] DEFAULT '{}',
+  estimated_value INT NOT NULL,
+  status VARCHAR(20) DEFAULT 'pending',
+  resolution_notes TEXT,
+  resolved_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Service-role only (RLS enabled with no policies).
 CREATE TABLE phone_verification_codes (
   id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
@@ -139,6 +157,7 @@ CREATE TABLE fraud_flags (
 CREATE INDEX idx_users_auth ON users(auth_id);
 CREATE INDEX idx_saved_items_user ON saved_items(user_id);
 CREATE INDEX idx_phone_codes_user ON phone_verification_codes(user_id);
+CREATE INDEX idx_claims_rental ON insurance_claims(rental_id);
 CREATE INDEX idx_items_owner ON items(owner_id);
 CREATE INDEX idx_items_category ON items(category);
 CREATE INDEX idx_rentals_renter ON rentals(renter_id);

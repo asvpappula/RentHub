@@ -13,6 +13,7 @@ import {
   FiGrid,
   FiUser,
   FiShield,
+  FiUmbrella,
 } from "react-icons/fi";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotifications } from "@/hooks/useNotifications";
@@ -185,6 +186,7 @@ export default function Navbar() {
                         { href: "/dashboard", icon: FiUser, label: "Renter dashboard" },
                         { href: "/owner/dashboard", icon: FiGrid, label: "Owner dashboard" },
                         { href: "/disputes", icon: FiShield, label: "Disputes" },
+                        { href: "/claims", icon: FiUmbrella, label: "Insurance claims" },
                         { href: "/settings", icon: FiSettings, label: "Settings" },
                       ].map(({ href, icon: Icon, label }) => (
                         <Link

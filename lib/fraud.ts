@@ -12,7 +12,7 @@ export interface FraudResult {
 /**
  * Rule-based risk scoring, run before rentals and listings are accepted.
  *
- * Points: new account +30 · phone unverified +20 · ID unverified +25 ·
+ * Points: new account +30 · phone unverified +20 · ID unverified +30 ·
  * low rating +20 · >2 damage claims in 30d +30 · >1 theft report +40 ·
  * >5 rentals in 24h +20. (Email is always verified for active accounts —
  * Supabase refuses to create a session until the address is confirmed.)
@@ -45,7 +45,7 @@ export async function checkFraudRisk(
   }
 
   if (!user.id_verified) {
-    score += 25;
+    score += 30;
     flags.push("id_unverified");
   }
 

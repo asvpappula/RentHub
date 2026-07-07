@@ -106,4 +106,12 @@ CREATE POLICY saved_items_insert_own ON saved_items
 CREATE POLICY saved_items_delete_own ON saved_items
   FOR DELETE USING (user_id = public.current_user_id());
 
+-- INSURANCE CLAIMS: parties of the rental can read; writes via service role.
+ALTER TABLE insurance_claims ENABLE ROW LEVEL SECURITY;
+CREATE POLICY claims_select_own ON insurance_claims
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM rentals r WHERE r.id = rental_id AND
+      (r.renter_id = public.current_user_id() OR r.owner_id = public.current_user_id()))
+  );
+
 -- FRAUD FLAGS: service-role only (no client policies on purpose).
