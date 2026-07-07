@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { FcGoogle } from "react-icons/fc";
 import { loginSchema } from "@/lib/validation";
+import { safeNextPath } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
@@ -33,7 +34,7 @@ function LoginForm() {
     try {
       await signIn(values.email, values.password);
       toast("success", "Welcome back!");
-      router.push(searchParams.get("next") ?? "/dashboard");
+      router.push(safeNextPath(searchParams.get("next")));
       router.refresh();
     } catch (err) {
       const message = err instanceof Error ? err.message : "";

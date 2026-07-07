@@ -69,16 +69,21 @@ export async function PUT(
     }
 
     // owner_rating = rating the renter gives the owner; renter_rating = vice versa.
+    // Each party may rate once — no rewriting an existing rating.
     if (input.owner_rating !== undefined) {
       if (!isRenter) throw new ApiError("Only the renter rates the owner", 403);
       if (rental.status !== "completed")
         throw new ApiError("You can rate after the rental completes", 409);
+      if (rental.owner_rating != null)
+        throw new ApiError("You've already rated this rental", 409);
       updates.owner_rating = input.owner_rating;
     }
     if (input.renter_rating !== undefined) {
       if (!isOwner) throw new ApiError("Only the owner rates the renter", 403);
       if (rental.status !== "completed")
         throw new ApiError("You can rate after the rental completes", 409);
+      if (rental.renter_rating != null)
+        throw new ApiError("You've already rated this rental", 409);
       updates.renter_rating = input.renter_rating;
     }
 

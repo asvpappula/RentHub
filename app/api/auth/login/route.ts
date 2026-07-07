@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { handleApiError, parseBody, rateLimit } from "@/lib/api-helpers";
+import { clientIp, handleApiError, parseBody, rateLimit } from "@/lib/api-helpers";
 import { loginSchema } from "@/lib/validation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export async function POST(request: Request) {
   try {
-    rateLimit(`login:${request.headers.get("x-forwarded-for") ?? "local"}`, 30);
+    await rateLimit(`login:${clientIp(request)}`, 30);
     const { email, password } = await parseBody(request, loginSchema);
 
     const supabase = await createSupabaseServerClient();

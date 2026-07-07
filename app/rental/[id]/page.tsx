@@ -107,28 +107,21 @@ export default function RentalDetailPage({
       "Rental marked complete."
     );
 
-  /** Owner path: complete the rental AND release the deposit hold. */
+  /** Owner path: one backend command completes AND releases the deposit. */
   const completeAndRelease = async () => {
     setBusy(true);
     try {
-      const completeRes = await fetch(`/api/rentals/${rental.id}/complete`, {
+      const res = await fetch(`/api/rentals/${rental.id}/complete?release=1`, {
         method: "POST",
       });
-      const completeData = await completeRes.json();
-      if (!completeRes.ok) throw new Error(completeData.error ?? "Completion failed");
-
-      if (rental.deposit_status === "held") {
-        const refundRes = await fetch("/api/payments/refund-deposit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rental_id: rental.id }),
-        });
-        const refundData = await refundRes.json();
-        if (!refundRes.ok) throw new Error(refundData.error ?? "Deposit release failed");
-        toast("success", "Rental completed — deposit released to the renter.");
-      } else {
-        toast("success", "Rental completed.");
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Completion failed");
+      toast(
+        "success",
+        rental.deposit_status === "held"
+          ? "Rental completed — deposit released to the renter."
+          : "Rental completed."
+      );
       setCompleteOpen(false);
       refetch();
     } catch (err) {

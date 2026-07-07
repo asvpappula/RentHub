@@ -63,11 +63,15 @@ export const sendMessageSchema = z.object({
   rental_id: z.number().int().positive().optional(),
 });
 
+// Evidence photos are private storage object paths (from the evidence
+// upload endpoint), not public URLs — validate shape, not URL-ness.
+const evidencePath = z.string().min(1).max(300);
+
 export const createDisputeSchema = z.object({
   rental_id: z.number().int().positive(),
   dispute_type: z.enum(["damage", "theft", "late_return", "other"]),
   description: z.string().min(10, "Describe what happened (10+ characters)").max(5000),
-  evidence_photos: z.array(z.url()).max(5).optional(),
+  evidence_photos: z.array(evidencePath).max(5).optional(),
 });
 
 export const paymentIntentSchema = z.object({

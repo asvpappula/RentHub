@@ -69,18 +69,44 @@ export function handleApiError(err: unknown) {
   return jsonError("Internal server error", 500);
 }
 
-// ---- lightweight in-memory rate limiter (100 req/min per key) ----
-const buckets = new Map<string, { count: number; resetAt: number }>();
-
-export function rateLimit(key: string, limit = 100, windowMs = 60_000) {
-  const now = Date.now();
-  const bucket = buckets.get(key);
-  if (!bucket || bucket.resetAt < now) {
-    buckets.set(key, { count: 1, resetAt: now + windowMs });
-    return;
+/**
+ * Durable, serverless-safe rate limiter backed by the Postgres
+ * check_rate_limit() function (atomic upsert). Survives across lambda
+ * instances, unlike an in-memory map. Throws ApiError(429) when exceeded.
+ *
+ * Fails OPEN on infrastructure error (never blocks a legitimate request
+ * because the limiter DB call hiccuped) but logs it.
+ */
+export async function rateLimit(
+  key: string,
+  limit = 100,
+  windowSeconds = 60
+): Promise<void> {
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin.rpc("check_rate_limit", {
+      p_key: key,
+      p_limit: limit,
+      p_window_seconds: windowSeconds,
+    });
+    if (error) {
+      console.error("[rate-limit] check failed, failing open:", error.message);
+      return;
+    }
+    if (data === false) throw new ApiError("Too many requests", 429);
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    console.error("[rate-limit] unexpected error, failing open:", err);
   }
-  bucket.count += 1;
-  if (bucket.count > limit) throw new ApiError("Too many requests", 429);
+}
+
+/** Best-effort client IP for anonymous (pre-auth) rate-limit keys. */
+export function clientIp(request: Request): string {
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
+    request.headers.get("x-real-ip") ??
+    "local"
+  );
 }
 
 export async function createNotification(

@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
-import { ApiError, handleApiError, requireUser } from "@/lib/api-helpers";
-
-const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+import {
+  ApiError,
+  handleApiError,
+  rateLimit,
+  requireUser,
+} from "@/lib/api-helpers";
+import { generatedObjectName, validateImageUpload } from "@/lib/upload-validation";
 
 export async function POST(
   request: Request,
@@ -11,18 +15,17 @@ export async function POST(
     const { id } = await params;
     const { user, admin } = await requireUser();
     if (user.id !== Number(id)) throw new ApiError("Forbidden", 403);
+    await rateLimit(`upload:${user.id}`, 60);
 
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File)) throw new ApiError("Missing file", 400);
-    if (!file.type.startsWith("image/")) throw new ApiError("File must be an image", 400);
-    if (file.size > MAX_AVATAR_BYTES) throw new ApiError("Image too large (max 5MB)", 400);
+    const { buffer, contentType, ext } = await validateImageUpload(file);
 
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${user.id}/avatar-${Date.now()}.${ext}`;
+    const path = generatedObjectName(String(user.id), ext);
     const { error: uploadError } = await admin.storage
       .from("profile-photos")
-      .upload(path, file, { upsert: true, contentType: file.type });
+      .upload(path, buffer, { upsert: true, contentType });
     if (uploadError) throw new ApiError(uploadError.message, 500);
 
     const {

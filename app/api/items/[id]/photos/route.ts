@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
-import { ApiError, handleApiError, requireUser } from "@/lib/api-helpers";
+import {
+  ApiError,
+  handleApiError,
+  rateLimit,
+  requireUser,
+} from "@/lib/api-helpers";
 import { createSupabaseAdminClient } from "@/lib/supabase-server";
-
-const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
+import { generatedObjectName, validateImageUpload } from "@/lib/upload-validation";
 
 export async function GET(
   _request: Request,
@@ -38,6 +42,7 @@ export async function POST(
       .single();
     if (!item) throw new ApiError("Item not found", 404);
     if (item.owner_id !== user.id) throw new ApiError("Forbidden", 403);
+    await rateLimit(`upload:${user.id}`, 60);
 
     const form = await request.formData();
     const files = form.getAll("files").filter((f): f is File => f instanceof File);
@@ -51,18 +56,17 @@ export async function POST(
     if ((existingCount ?? 0) + files.length > 10)
       throw new ApiError("Maximum 10 photos per item", 400);
 
-    const bucket = photoType === "condition" ? "condition-photos" : "item-photos";
+    // Listing photos are non-sensitive → public bucket. (Condition/evidence
+    // photos go through the private disputes/claims endpoints instead.)
+    const bucket = "item-photos";
     const created = [];
 
     for (const file of files) {
-      if (!file.type.startsWith("image/")) throw new ApiError("Files must be images", 400);
-      if (file.size > MAX_PHOTO_BYTES) throw new ApiError("Image too large (max 8MB)", 400);
-
-      const ext = file.name.split(".").pop() || "jpg";
-      const path = `${itemId}/${Date.now()}-${Math.round(Math.random() * 1e6)}.${ext}`;
+      const { buffer, contentType, ext } = await validateImageUpload(file);
+      const path = generatedObjectName(String(itemId), ext);
       const { error: uploadError } = await admin.storage
         .from(bucket)
-        .upload(path, file, { contentType: file.type });
+        .upload(path, buffer, { contentType });
       if (uploadError) throw new ApiError(uploadError.message, 500);
 
       const {

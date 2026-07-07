@@ -6,6 +6,7 @@ import {
   parseBody,
   requireUser,
 } from "@/lib/api-helpers";
+import { signEvidenceUrls } from "@/lib/evidence";
 
 const updateSchema = z.object({
   status: z.enum(["pending", "under_review", "resolved", "rejected"]),
@@ -36,6 +37,11 @@ export async function GET(
     const { id } = await params;
     const { user, admin } = await requireUser();
     const dispute = await getAuthorizedDispute(Number(id), user.id, admin);
+    // Private evidence paths → signed URLs, only for the authorized parties.
+    dispute.evidence_photos = await signEvidenceUrls(
+      admin,
+      dispute.evidence_photos ?? []
+    );
     return NextResponse.json({ dispute });
   } catch (err) {
     return handleApiError(err);

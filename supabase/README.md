@@ -23,14 +23,17 @@ In **SQL Editor**, run in order:
 
 ## 3. Storage buckets
 
-**Storage → New bucket** (mark each *Public*):
+**Storage → New bucket**:
 
-- `item-photos`
-- `condition-photos`
-- `profile-photos`
+- `item-photos` — **Public** (listing photos)
+- `profile-photos` — **Public** (avatars)
+- `condition-photos` — **PRIVATE** (damage/theft/claim evidence). The API
+  serves these to authorized parties via short-lived signed URLs. Do **not**
+  make this bucket public.
 
-Add a storage policy on each bucket allowing authenticated users to upload:
-`(auth.role() = 'authenticated')` for INSERT.
+No client-facing storage policies are needed: all uploads go through the API
+using the service-role key (which validates ownership + magic-byte image type
+first). Uploads are never performed directly from the browser.
 
 ## 4. Authentication
 
@@ -53,9 +56,15 @@ Add a storage policy on each bucket allowing authenticated users to upload:
 2. **Developers → API keys**: copy the publishable key →
    `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` and secret key → `STRIPE_SECRET_KEY`.
 3. **Developers → Webhooks → Add endpoint**: `https://<your-app>/api/webhooks/stripe`
-   listening to `payment_intent.succeeded`, `payment_intent.payment_failed`,
-   `charge.refunded`. Copy the signing secret → `STRIPE_WEBHOOK_SECRET`.
+   listening to `payment_intent.succeeded`, `payment_intent.amount_capturable_updated`,
+   `payment_intent.payment_failed`, `charge.refunded`, `charge.dispute.created`,
+   `identity.verification_session.verified`, `identity.verification_session.requires_input`.
+   Copy the signing secret → `STRIPE_WEBHOOK_SECRET`.
    For local dev: `stripe listen --forward-to localhost:3000/api/webhooks/stripe`.
+
+   ⚠️ **Required**: the webhook route now rejects all events unless
+   `STRIPE_WEBHOOK_SECRET` is a real signing secret (it fails safe rather than
+   trusting unverified events). Set it before going live.
 
 Test cards: `4242 4242 4242 4242` (success), `4000 0000 0000 0002` (decline),
 `4000 0025 0000 3155` (3-D Secure).

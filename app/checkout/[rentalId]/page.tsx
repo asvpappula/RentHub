@@ -72,32 +72,25 @@ export default function CheckoutPage({
     }
   };
 
+  // After the rental payment, the SERVER verifies it, places the deposit
+  // hold, and confirms — all in one call. We only show a second form if the
+  // bank requires authentication for the deposit (rare with saved cards).
   const onRentalPaid = async (paymentIntentId: string) => {
     try {
-      await fetch("/api/payments/confirm", {
+      const res = await fetch("/api/payments/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ payment_intent_id: paymentIntentId }),
       });
-      toast("success", "Payment received!");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Confirmation failed");
 
-      if ((rental?.deposit_amount ?? 0) > 0) {
-        const res = await fetch("/api/payments/deposit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rental_id: Number(rentalId) }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Deposit setup failed");
-        if (data.held) {
-          // Deposit hold placed automatically with the same card.
-          toast("success", "Deposit hold placed — you're all set!");
-          setStep("done");
-        } else {
-          setClientSecret(data.clientSecret);
-          setStep("deposit");
-        }
+      if (data.needsDepositAuth && data.clientSecret) {
+        toast("info", "One more step — authorize your deposit hold.");
+        setClientSecret(data.clientSecret);
+        setStep("deposit");
       } else {
+        toast("success", "Booking confirmed — you're all set!");
         setStep("done");
       }
     } catch (err) {

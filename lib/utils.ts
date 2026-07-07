@@ -50,6 +50,23 @@ export function quotePrice(
   };
 }
 
+/**
+ * Sanitizes a post-login `next` redirect. Only internal, single-slash
+ * absolute paths are allowed — blocks full URLs, protocol-relative
+ * `//evil.com`, `javascript:` and other schemes, and backslash tricks.
+ */
+export function safeNextPath(
+  next: string | null | undefined,
+  fallback = "/dashboard"
+): string {
+  if (!next) return fallback;
+  if (!next.startsWith("/")) return fallback;
+  if (next.startsWith("//") || next.startsWith("/\\")) return fallback;
+  if (/\s/.test(next)) return fallback;
+  if (/^\/[a-z][a-z0-9+.-]*:/i.test(next)) return fallback;
+  return next;
+}
+
 export function initials(name?: string | null) {
   if (!name) return "?";
   return name

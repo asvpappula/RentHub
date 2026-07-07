@@ -56,7 +56,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const { user, admin } = await requireUser();
-    rateLimit(`msg:${user.id}`, 60);
+    await rateLimit(`msg:${user.id}`, 60);
     const input = await parseBody(request, sendMessageSchema);
 
     if (input.recipient_id === user.id)

@@ -2,19 +2,21 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
   ApiError,
-  createNotification,
   handleApiError,
   parseBody,
   requireUser,
 } from "@/lib/api-helpers";
 import { getStripeServer } from "@/lib/stripe-server";
+import { finalizeRentalConfirmation } from "@/lib/rental-confirmation";
 
 const schema = z.object({ payment_intent_id: z.string().min(1) });
 
 /**
- * Called after Stripe Elements confirms the payment client-side.
- * Verifies the intent status with Stripe and marks the rental confirmed.
- * (The webhook does the same — this gives immediate UX feedback.)
+ * Called after Stripe Elements confirms the rental payment client-side.
+ * The SERVER then verifies the payment, places the deposit hold, and only
+ * marks the rental confirmed if both hold — client redirect success is never
+ * treated as truth. The webhook runs the same gate, so closing the tab here
+ * can't leave a rental confirmed without a deposit.
  */
 export async function POST(request: Request) {
   try {
@@ -35,50 +37,29 @@ export async function POST(request: Request) {
     if (!rental) throw new ApiError("Rental not found", 404);
     if (rental.renter_id !== user.id) throw new ApiError("Forbidden", 403);
 
-    if (intent.metadata.kind === "deposit") {
-      if (intent.status !== "requires_capture" && intent.status !== "succeeded")
-        throw new ApiError(`Deposit not authorized (status: ${intent.status})`, 409);
-      const { data: updated } = await admin
-        .from("rentals")
-        .update({ deposit_status: "held" })
-        .eq("id", rentalId)
-        .neq("deposit_status", "held")
-        .select("id");
-      if (updated && updated.length > 0) {
-        await createNotification(
-          admin,
-          rental.renter_id,
-          "deposit_held",
-          "Deposit held in escrow",
-          `Your $${rental.deposit_amount} deposit for "${rental.item?.title}" is on hold — it's released when the rental completes without damage.`,
-          rentalId
-        );
-      }
-      return NextResponse.json({ success: true, deposit_status: "held" });
+    // A "deposit" intent confirmed by the client (SCA fallback path): just
+    // re-run the gate, which will see the hold and finish confirmation.
+    const result = await finalizeRentalConfirmation(admin, stripe, rental);
+
+    if (result.confirmed) {
+      return NextResponse.json({ success: true, status: "confirmed" });
     }
-
-    if (intent.status !== "succeeded")
-      throw new ApiError(`Payment not completed (status: ${intent.status})`, 409);
-
-    await admin
-      .from("rentals")
-      .update({ status: "confirmed" })
-      .eq("id", rentalId);
-    await admin
-      .from("items")
-      .update({ availability_status: "rented" })
-      .eq("id", rental.item_id);
-
-    await createNotification(
-      admin,
-      rental.owner_id,
-      "rental_confirmed",
-      "Booking confirmed",
-      `"${rental.item?.title}" was booked and paid for.`,
-      rentalId
+    if (result.reason === "deposit_auth_required") {
+      return NextResponse.json(
+        { success: false, needsDepositAuth: true, clientSecret: result.clientSecret },
+        { status: 200 }
+      );
+    }
+    if (result.reason === "double_booked") {
+      throw new ApiError(
+        "Those dates were just booked by someone else. Your payment will be refunded.",
+        409
+      );
+    }
+    throw new ApiError(
+      `Payment not completed (status: ${result.status}). Please try again.`,
+      409
     );
-
-    return NextResponse.json({ success: true, status: "confirmed" });
   } catch (err) {
     return handleApiError(err);
   }

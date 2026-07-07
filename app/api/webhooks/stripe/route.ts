@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { getStripeServer } from "@/lib/stripe-server";
 import { createSupabaseAdminClient } from "@/lib/supabase-server";
 import { createNotification } from "@/lib/api-helpers";
+import { finalizeRentalConfirmation } from "@/lib/rental-confirmation";
 
 export async function POST(request: Request) {
   const signature = request.headers.get("stripe-signature");
@@ -10,22 +11,38 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing signature" }, { status: 400 });
   }
 
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  // Fail safe: never process an event we can't cryptographically verify.
+  if (!secret || secret === "whsec_placeholder") {
+    console.error(
+      "[stripe-webhook] STRIPE_WEBHOOK_SECRET is not configured — rejecting event. " +
+        "Set a real signing secret from the Stripe dashboard."
+    );
+    return NextResponse.json({ error: "Webhook not configured" }, { status: 500 });
+  }
+
   const body = await request.text();
   const stripe = getStripeServer();
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
-    );
+    event = stripe.webhooks.constructEvent(body, signature, secret);
   } catch (err) {
     console.error("[stripe-webhook] signature verification failed", err);
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
   const admin = createSupabaseAdminClient();
+
+  // Idempotency / replay protection: claim the event id atomically. If it
+  // already exists we've seen it — ack and skip.
+  const { error: dedupeError } = await admin
+    .from("webhook_events")
+    .insert({ event_id: event.id, type: event.type, status: "processing" });
+  if (dedupeError) {
+    // Primary-key conflict → duplicate delivery. Any other error → log + ack.
+    return NextResponse.json({ received: true, duplicate: true });
+  }
 
   try {
     switch (event.type) {
@@ -35,39 +52,23 @@ export async function POST(request: Request) {
         if (!rentalId) break;
 
         if (intent.metadata.kind === "deposit") {
-          await admin
-            .from("rentals")
-            .update({ deposit_status: "claimed" })
-            .eq("id", rentalId)
-            .eq("deposit_status", "held");
-        } else {
-          const { data: rental } = await admin
-            .from("rentals")
-            .update({ status: "confirmed" })
-            .eq("id", rentalId)
-            .in("status", ["approved", "pending"])
-            .select("*, item:items(id, title)")
-            .single();
-          if (rental) {
-            await admin
-              .from("items")
-              .update({ availability_status: "rented" })
-              .eq("id", rental.item_id);
-            await createNotification(
-              admin,
-              rental.owner_id,
-              "rental_confirmed",
-              "Booking confirmed",
-              `"${rental.item?.title}" was booked and paid for.`,
-              rentalId
-            );
-          }
+          // A captured deposit (claim) — the claim/resolve flow already sets
+          // deposit_status; nothing to do on plain success here.
+          break;
         }
+
+        // Rental payment succeeded → run the server-side confirmation gate,
+        // which places the deposit hold and only then confirms.
+        const { data: rental } = await admin
+          .from("rentals")
+          .select("*, item:items(id, title)")
+          .eq("id", rentalId)
+          .single();
+        if (rental) await finalizeRentalConfirmation(admin, stripe, rental);
         break;
       }
 
       case "payment_intent.amount_capturable_updated": {
-        // Deposit hold authorized.
         const intent = event.data.object;
         const rentalId = Number(intent.metadata.rental_id);
         if (rentalId && intent.metadata.kind === "deposit") {
@@ -75,7 +76,7 @@ export async function POST(request: Request) {
             .from("rentals")
             .update({ deposit_status: "held" })
             .eq("id", rentalId)
-            .eq("deposit_status", "pending");
+            .in("deposit_status", ["pending", "processing"]);
         }
         break;
       }
@@ -150,9 +151,49 @@ export async function POST(request: Request) {
         }
         break;
       }
+
+      case "charge.dispute.created": {
+        // Chargeback opened — flag the rental for admin review (Phase 3).
+        const dispute = event.data.object;
+        const intentId =
+          typeof dispute.payment_intent === "string"
+            ? dispute.payment_intent
+            : dispute.payment_intent?.id;
+        if (intentId) {
+          const { data: rental } = await admin
+            .from("rentals")
+            .select("id, renter_id, owner_id")
+            .or(
+              `payment_intent_id.eq.${intentId},deposit_payment_intent_id.eq.${intentId}`
+            )
+            .maybeSingle();
+          if (rental) {
+            await admin.from("rentals").update({ status: "disputed" }).eq("id", rental.id);
+            for (const uid of [rental.owner_id, rental.renter_id]) {
+              await createNotification(
+                admin,
+                uid,
+                "dispute",
+                "Payment dispute opened",
+                "A card chargeback was opened on this rental. RentHub will review it."
+              );
+            }
+          }
+        }
+        break;
+      }
     }
+
+    await admin
+      .from("webhook_events")
+      .update({ status: "processed" })
+      .eq("event_id", event.id);
   } catch (err) {
     console.error("[stripe-webhook] handler error", err);
+    await admin
+      .from("webhook_events")
+      .update({ status: "error", error: String(err) })
+      .eq("event_id", event.id);
     return NextResponse.json({ error: "Handler error" }, { status: 500 });
   }
 

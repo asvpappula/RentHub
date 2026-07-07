@@ -5,8 +5,10 @@ import {
   createNotification,
   handleApiError,
   parseBody,
+  rateLimit,
   requireUser,
 } from "@/lib/api-helpers";
+import { signEvidenceUrls } from "@/lib/evidence";
 
 const COVERAGE_LIMIT = 500;
 
@@ -14,7 +16,8 @@ const createSchema = z.object({
   rental_id: z.number().int().positive(),
   claim_type: z.enum(["damage", "theft", "loss"]),
   description: z.string().min(10, "Describe what happened (10+ characters)").max(5000),
-  photo_urls: z.array(z.url()).max(5).default([]),
+  // Private storage object paths from the evidence upload endpoint.
+  photo_urls: z.array(z.string().min(1).max(300)).max(5).default([]),
   estimated_value: z
     .number()
     .int()
@@ -38,7 +41,14 @@ export async function GET() {
     const mine = (data ?? []).filter(
       (c) => c.rental?.renter_id === user.id || c.rental?.owner_id === user.id
     );
-    return NextResponse.json({ claims: mine });
+    // Resolve private evidence paths → short-lived signed URLs for the parties.
+    const withSigned = await Promise.all(
+      mine.map(async (c) => ({
+        ...c,
+        photo_urls: await signEvidenceUrls(admin, c.photo_urls ?? []),
+      }))
+    );
+    return NextResponse.json({ claims: withSigned });
   } catch (err) {
     return handleApiError(err);
   }
@@ -48,6 +58,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const { user, admin } = await requireUser();
+    await rateLimit(`claim:${user.id}`, 10);
     const input = await parseBody(request, createSchema);
 
     const { data: rental } = await admin

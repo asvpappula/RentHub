@@ -39,7 +39,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const { user, admin } = await requireUser();
-    rateLimit(`rental:${user.id}`, 20);
+    await rateLimit(`rental:${user.id}`, 20);
     const input = await parseBody(request, createRentalSchema);
 
     const { data: item } = await admin

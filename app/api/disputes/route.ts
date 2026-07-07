@@ -4,6 +4,7 @@ import {
   createNotification,
   handleApiError,
   parseBody,
+  rateLimit,
   requireUser,
 } from "@/lib/api-helpers";
 import { createDisputeSchema } from "@/lib/validation";
@@ -34,6 +35,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const { user, admin } = await requireUser();
+    await rateLimit(`dispute:${user.id}`, 10);
     const input = await parseBody(request, createDisputeSchema);
 
     const { data: rental } = await admin
