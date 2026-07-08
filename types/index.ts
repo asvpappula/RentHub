@@ -37,6 +37,7 @@ export interface Item {
   deposit_amount: number;
   insurance_fee_percentage: number;
   availability_status: AvailabilityStatus;
+  hidden?: boolean;
   gps_tracking_required: boolean;
   delivery_options: string | null;
   view_count: number;

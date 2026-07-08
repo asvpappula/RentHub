@@ -21,18 +21,25 @@ export async function GET(
     const { data } = await admin
       .from("items")
       .select(
-        "*, owner:users!items_owner_id_fkey(id, name, avatar_url, bio, average_rating, total_reviews, total_rentals, id_verified, phone_verified, created_at), photos:item_photos(*)"
+        "*, owner:users!items_owner_id_fkey(id, name, avatar_url, bio, average_rating, total_reviews, total_rentals, id_verified, phone_verified, suspended, created_at), photos:item_photos(*)"
       )
       .eq("id", itemId)
       .single();
     if (!data) throw new ApiError("Item not found", 404);
 
-    // Hidden (moderated) listings are visible only to their owner or an admin.
-    if (data.hidden) {
+    // Hidden (moderated) listings AND suspended owners' listings are visible
+    // only to the owner or an admin — the public gets "not found", matching the
+    // browse exclusion (so a suspended owner's item can't be reached by link).
+    const ownerObj = (Array.isArray(data.owner) ? data.owner[0] : data.owner) as
+      | { suspended?: boolean }
+      | null;
+    if (data.hidden || ownerObj?.suspended) {
       const viewer = await getOptionalUser();
       if (!viewer || (viewer.id !== data.owner_id && !viewer.is_admin))
         throw new ApiError("Item not found", 404);
     }
+    // Never expose the owner's suspension state in the public item DTO.
+    if (ownerObj) delete ownerObj.suspended;
 
     // Fire-and-forget view counter.
     admin

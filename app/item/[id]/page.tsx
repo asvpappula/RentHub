@@ -187,6 +187,37 @@ export default function ItemDetailPage({
   const photo = photos[photoIndex];
   const isOwner = user?.id === item.owner_id;
 
+  // Request-button availability is FRONTEND GUIDANCE ONLY — POST /api/rentals
+  // stays the authority. A merely 'rented' item is still requestable for open
+  // dates, so we block the button only when the listing genuinely can't be
+  // requested: moderated (hidden) or owner-paused ('unavailable'), invalid
+  // dates, or a selected range that overlaps an existing booking. (Hidden and
+  // suspended-owner listings 404 for the public before this page ever renders.)
+  const listingUnavailable =
+    Boolean(item.hidden) || item.availability_status === "unavailable";
+  const datesSelected = Boolean(quote);
+  const datesOverlapBooked =
+    datesSelected &&
+    booked.some((b) => startDate <= b.end_date && endDate >= b.start_date);
+
+  let requestLabel = "Request to rent";
+  let requestBlocked = false;
+  let dateNotice: string | null = null;
+  if (listingUnavailable) {
+    requestLabel = "Currently unavailable";
+    requestBlocked = true;
+  } else if (!user) {
+    requestLabel = "Log in to request";
+  } else if (!datesSelected) {
+    requestLabel = "Select rental dates";
+    requestBlocked = true;
+  } else if (datesOverlapBooked) {
+    requestLabel = "Those dates are booked";
+    requestBlocked = true;
+    dateNotice =
+      "The dates you picked overlap an existing booking — try different dates.";
+  }
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <div className="grid gap-8 lg:grid-cols-5">
@@ -501,15 +532,20 @@ export default function ItemDetailPage({
                   className="mt-5 w-full"
                   size="lg"
                   loading={requesting}
-                  disabled={item.availability_status !== "available"}
+                  disabled={requestBlocked}
                   onClick={requestRental}
                 >
-                  {item.availability_status === "available"
-                    ? "Request to rent"
-                    : "Currently unavailable"}
+                  {requestLabel}
                 </Button>
+                {dateNotice && (
+                  <p className="mt-2 text-center text-xs text-amber-600">
+                    {dateNotice}
+                  </p>
+                )}
                 <p className="mt-3 text-center text-xs text-slate-400">
-                  You won&apos;t be charged until the owner approves.
+                  {listingUnavailable
+                    ? "This listing isn't accepting requests right now."
+                    : "You won't be charged until the owner approves."}
                 </p>
                 <Button
                   variant="outline"
