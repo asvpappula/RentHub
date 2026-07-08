@@ -35,10 +35,21 @@ export async function GET(request: Request) {
         { count: "exact" }
       );
 
-    // Public browse: only available, non-hidden listings. Owners viewing their
-    // own listings (ownerId filter) still see hidden ones (marked in the UI).
+    // Public browse: exclude moderated (hidden) listings, owner-paused
+    // ('unavailable') listings, and suspended owners' listings. A currently-
+    // booked ('rented') item STAYS browsable — real booking availability is
+    // enforced by date-overlap checks at request/approve/pay time, not by
+    // hiding the whole listing. Owners viewing their own listings (ownerId
+    // filter) still see everything (hidden/unavailable are marked in the UI).
     if (!ownerId) {
-      query = query.eq("availability_status", "available").eq("hidden", false);
+      query = query.eq("hidden", false).neq("availability_status", "unavailable");
+      const { data: suspendedOwners } = await admin
+        .from("users")
+        .select("id")
+        .eq("suspended", true);
+      const suspendedIds = (suspendedOwners ?? []).map((u) => u.id);
+      if (suspendedIds.length)
+        query = query.not("owner_id", "in", `(${suspendedIds.join(",")})`);
     }
     if (search) query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
     if (category) query = query.eq("category", category);

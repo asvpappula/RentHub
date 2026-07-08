@@ -46,13 +46,21 @@ export async function POST(request: Request) {
 
     const { data: item } = await admin
       .from("items")
-      .select("*")
+      .select("*, owner:users!items_owner_id_fkey(suspended)")
       .eq("id", input.item_id)
       .single();
     if (!item) throw new ApiError("Item not found", 404);
     if (item.owner_id === user.id)
       throw new ApiError("You cannot rent your own item", 400);
-    if (item.availability_status !== "available")
+    // Moderation: a hidden listing or a suspended owner's listing is not
+    // rentable, even with a known item_id.
+    if (item.hidden) throw new ApiError("This item is not available", 403);
+    const ownerRow = Array.isArray(item.owner) ? item.owner[0] : item.owner;
+    if (ownerRow?.suspended)
+      throw new ApiError("This item is not available", 403);
+    // Owner-paused listings are not rentable. A 'rented' flag does NOT block —
+    // the date-overlap check below is the authoritative availability gate.
+    if (item.availability_status === "unavailable")
       throw new ApiError("This item is not available", 409);
 
     // Reject overlapping bookings.
