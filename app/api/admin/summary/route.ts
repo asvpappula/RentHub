@@ -7,6 +7,7 @@ export async function GET() {
   try {
     const { admin } = await requireAdmin();
 
+    const today = new Date().toISOString().slice(0, 10);
     const [
       openDisputes,
       openClaims,
@@ -17,6 +18,8 @@ export async function GET() {
       fraudFlags,
       suspendedUsers,
       hiddenListings,
+      openIncidents,
+      lateRentals,
     ] = await Promise.all([
       admin.from("disputes").select("id", { count: "exact", head: true })
         .in("status", ["pending", "under_review", "appealed"]),
@@ -36,6 +39,10 @@ export async function GET() {
         .eq("suspended", true),
       admin.from("items").select("id", { count: "exact", head: true })
         .eq("hidden", true),
+      admin.from("incidents").select("id", { count: "exact", head: true })
+        .in("status", ["open", "under_review", "awaiting_evidence"]),
+      admin.from("rentals").select("id", { count: "exact", head: true })
+        .eq("status", "active").lt("end_date", today).in("return_status", ["none", "issue"]),
     ]);
 
     return NextResponse.json({
@@ -49,6 +56,8 @@ export async function GET() {
         fraudFlags: fraudFlags.count ?? 0,
         suspendedUsers: suspendedUsers.count ?? 0,
         hiddenListings: hiddenListings.count ?? 0,
+        openIncidents: openIncidents.count ?? 0,
+        lateRentals: lateRentals.count ?? 0,
       },
     });
   } catch (err) {

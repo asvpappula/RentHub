@@ -42,6 +42,8 @@ export default function EditItemPage({
     availability_status: "available",
     gps_tracking_required: false,
     delivery_options: "",
+    serial_number: "",
+    accessories: "",
   });
 
   useEffect(() => {
@@ -62,6 +64,8 @@ export default function EditItemPage({
             availability_status: it.availability_status,
             gps_tracking_required: it.gps_tracking_required,
             delivery_options: it.delivery_options ?? "",
+            serial_number: it.serial_number ?? "",
+            accessories: (it.accessories ?? []).join(", "),
           });
         }
       })
@@ -153,6 +157,10 @@ export default function EditItemPage({
           availability_status: form.availability_status,
           gps_tracking_required: form.gps_tracking_required,
           delivery_options: form.delivery_options || undefined,
+          serial_number: form.serial_number || undefined,
+          accessories: form.accessories.trim()
+            ? form.accessories.split(",").map((s) => s.trim()).filter(Boolean)
+            : undefined,
         }),
       });
       const data = await res.json();
@@ -358,6 +366,21 @@ export default function EditItemPage({
           value={form.delivery_options}
           onChange={(e) => set("delivery_options", e.target.value)}
           placeholder="Pickup, Owner drop-off"
+        />
+
+        <Input
+          label="Serial / identifier (private)"
+          value={form.serial_number}
+          onChange={(e) => set("serial_number", e.target.value)}
+          placeholder="e.g. SN-12345 — shown only to you, the renter, and admin"
+          hint="Never shown publicly. Used to verify the exact unit at pickup/return."
+        />
+        <Input
+          label="Included accessories"
+          value={form.accessories}
+          onChange={(e) => set("accessories", e.target.value)}
+          placeholder="Charger, Case, Strap"
+          hint="Comma-separated — becomes the pickup/return checklist."
         />
 
         <label className="flex items-start gap-3 rounded-xl bg-slate-50 p-4">

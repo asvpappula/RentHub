@@ -43,6 +43,9 @@ export interface Item {
   view_count: number;
   rental_count: number;
   average_rating: number | null;
+  /** PRIVATE — only surfaced to owner/admin/participant, never in public DTOs */
+  serial_number?: string | null;
+  accessories?: string[];
   created_at: string;
   updated_at: string;
   owner?: User;
@@ -67,7 +70,13 @@ export type RentalStatus =
   | "cancelled"
   | "disputed";
 
-export type DepositStatus = "pending" | "held" | "refunded" | "claimed";
+export type DepositStatus =
+  | "pending"
+  | "held"
+  | "refunding"
+  | "claiming"
+  | "refunded"
+  | "claimed";
 
 export interface Rental {
   id: number;
@@ -87,11 +96,30 @@ export interface Rental {
   agreement_accepted_at?: string | null;
   renter_rating: number | null;
   owner_rating: number | null;
+  // Phase 4 — pickup / return handoff
+  pickup_code?: string | null;
+  pickup_confirmed_at?: string | null;
+  pickup_confirmed_by?: number | null;
+  pickup_photos?: string[];
+  pickup_notes?: string | null;
+  pickup_accessories?: { name: string; present: boolean }[];
+  return_submitted_at?: string | null;
+  return_submitted_by?: number | null;
+  return_photos?: string[];
+  return_notes?: string | null;
+  return_reviewed_at?: string | null;
+  return_reviewed_by?: number | null;
+  return_status?: "none" | "submitted" | "accepted" | "issue";
   created_at: string;
   updated_at: string;
   item?: Item;
   renter?: User;
   owner?: User;
+  // signed evidence URLs + open incidents added by GET /api/rentals/[id]
+  pickup_photo_urls?: string[];
+  return_photo_urls?: string[];
+  incidents?: Incident[];
+  is_late?: boolean;
 }
 
 export interface Message {
@@ -116,7 +144,52 @@ export type NotificationType =
   | "dispute"
   | "deposit_held"
   | "deposit_refunded"
-  | "deposit_claimed";
+  | "deposit_claimed"
+  // Phase 4 — handoff / incidents
+  | "pickup_confirmed"
+  | "return_submitted"
+  | "return_accepted"
+  | "incident_opened"
+  | "incident_updated"
+  | "late_return";
+
+export type IncidentType =
+  | "late_return"
+  | "damage"
+  | "missing_accessory"
+  | "missing_item"
+  | "theft_suspected"
+  | "wrong_item_returned"
+  | "other";
+
+export type IncidentStatus =
+  | "open"
+  | "under_review"
+  | "awaiting_evidence"
+  | "resolved_owner"
+  | "resolved_renter"
+  | "closed";
+
+export interface Incident {
+  id: number;
+  rental_id: number;
+  opened_by: number;
+  against_user_id: number | null;
+  type: IncidentType;
+  status: IncidentStatus;
+  description: string;
+  /** private storage object paths */
+  evidence: string[];
+  /** signed URLs added by the API for authorized readers */
+  evidence_urls?: string[];
+  resolution_notes: string | null;
+  resolved_by: number | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+  rental?: Rental;
+  opener?: User;
+}
 
 export interface AppNotification {
   id: number;

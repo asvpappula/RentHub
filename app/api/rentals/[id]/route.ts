@@ -6,6 +6,8 @@ import {
   parseBody,
   requireUser,
 } from "@/lib/api-helpers";
+import { signEvidenceUrls } from "@/lib/evidence";
+import { isRentalLate } from "@/lib/booking";
 
 const RENTAL_SELECT =
   "*, item:items(*, photos:item_photos(*)), renter:users!rentals_renter_id_fkey(id, name, avatar_url, average_rating, id_verified, phone_verified, total_reviews, total_rentals, created_at), owner:users!rentals_owner_id_fkey(id, name, avatar_url, average_rating, id_verified, phone_verified, total_reviews, total_rentals, created_at)";
@@ -33,7 +35,34 @@ export async function GET(
     if (rental.renter_id !== user.id && rental.owner_id !== user.id)
       throw new ApiError("Forbidden", 403);
 
-    return NextResponse.json({ rental });
+    // Enrich with SIGNED evidence URLs + incidents + late status. Participant-
+    // gated above, so the item serial (from item:*) is safely visible to the
+    // two parties for pickup/return verification.
+    const [pickupUrls, returnUrls, { data: incidentsRaw }] = await Promise.all([
+      signEvidenceUrls(admin, (rental.pickup_photos as string[]) ?? []),
+      signEvidenceUrls(admin, (rental.return_photos as string[]) ?? []),
+      admin
+        .from("incidents")
+        .select("*")
+        .eq("rental_id", Number(id))
+        .order("created_at", { ascending: false }),
+    ]);
+    const incidents = await Promise.all(
+      (incidentsRaw ?? []).map(async (i) => ({
+        ...i,
+        evidence_urls: await signEvidenceUrls(admin, i.evidence ?? []),
+      }))
+    );
+
+    return NextResponse.json({
+      rental: {
+        ...rental,
+        pickup_photo_urls: pickupUrls,
+        return_photo_urls: returnUrls,
+        incidents,
+        is_late: isRentalLate(rental as { status: string; end_date: string; return_status?: string | null }),
+      },
+    });
   } catch (err) {
     return handleApiError(err);
   }

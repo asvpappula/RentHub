@@ -8,6 +8,7 @@ import {
 const NAV = [
   { href: "/admin", label: "Overview" },
   { href: "/admin/disputes", label: "Disputes" },
+  { href: "/admin/incidents", label: "Incidents" },
   { href: "/admin/claims", label: "Claims" },
   { href: "/admin/payouts", label: "Payouts" },
   { href: "/admin/payments", label: "Chargebacks" },

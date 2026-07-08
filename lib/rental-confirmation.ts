@@ -2,6 +2,7 @@ import type Stripe from "stripe";
 import { createNotification } from "@/lib/api-helpers";
 import { recordPaymentAndHeldPayout } from "@/lib/payouts";
 import { sendTransactional } from "@/lib/email";
+import { generatePickupCode, logBookingEvent } from "@/lib/booking";
 import type { createSupabaseAdminClient } from "@/lib/supabase-server";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
@@ -106,14 +107,29 @@ export async function finalizeRentalConfirmation(
   // No transfer happens yet — the payout is released at completion.
   await recordPaymentAndHeldPayout(admin, stripe, rental);
 
+  // Generate the one-time pickup code the renter shows the owner at handoff
+  // (idempotent: only sets it once, on the first confirmation).
+  await admin
+    .from("rentals")
+    .update({ pickup_code: generatePickupCode() })
+    .eq("id", rental.id)
+    .is("pickup_code", null);
+
   // Notify + email the owner once (only when we actually moved it to
   // confirmed). Stable dedupe key → confirm route + webhook never double-send.
   if (updated) {
+    await logBookingEvent(admin, {
+      rentalId: rental.id,
+      eventType: "confirmed",
+      fromStatus: "approved",
+      toStatus: "confirmed",
+      actorRole: "system",
+    });
     await sendTransactional(admin, {
       userId: rental.owner_id,
       notificationType: "rental_confirmed",
       subject: "Booking confirmed",
-      body: `"${rental.item?.title ?? "Your item"}" was booked and paid for. Coordinate pickup with the renter in messages.`,
+      body: `"${rental.item?.title ?? "Your item"}" was booked and paid for. Coordinate pickup with the renter — they'll share a pickup code to confirm the handoff.`,
       dedupeKey: `rental-${rental.id}-confirmed`,
       linkPath: `/rental/${rental.id}`,
       relatedRentalId: rental.id,

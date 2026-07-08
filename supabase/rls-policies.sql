@@ -136,6 +136,15 @@ ALTER TABLE webhook_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_actions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE email_events ENABLE ROW LEVEL SECURITY;
 
+-- ===== Phase 4: handoff audit + incidents — service-role only (deny-all) =====
+-- booking_state_events and incidents hold evidence paths and internal audit
+-- data; clients never read/write them directly. Reads go through API routes
+-- that verify participant/admin identity and mint signed evidence URLs.
+ALTER TABLE booking_state_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE incidents ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON booking_state_events FROM anon, authenticated;
+REVOKE ALL ON incidents FROM anon, authenticated;
+
 -- ===== Database-level double-booking guard =====
 -- No two approved/confirmed/active rentals for the same item may overlap.
 CREATE EXTENSION IF NOT EXISTS btree_gist;

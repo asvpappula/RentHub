@@ -27,19 +27,24 @@ export async function GET(
       .single();
     if (!data) throw new ApiError("Item not found", 404);
 
+    // Resolve the viewer once: the owner or an admin may see moderated listings
+    // and the private serial; the public may not.
+    const viewer = await getOptionalUser();
+    const isPrivileged = Boolean(
+      viewer && (viewer.id === data.owner_id || viewer.is_admin)
+    );
+
     // Hidden (moderated) listings AND suspended owners' listings are visible
     // only to the owner or an admin — the public gets "not found", matching the
     // browse exclusion (so a suspended owner's item can't be reached by link).
     const ownerObj = (Array.isArray(data.owner) ? data.owner[0] : data.owner) as
       | { suspended?: boolean }
       | null;
-    if (data.hidden || ownerObj?.suspended) {
-      const viewer = await getOptionalUser();
-      if (!viewer || (viewer.id !== data.owner_id && !viewer.is_admin))
-        throw new ApiError("Item not found", 404);
-    }
-    // Never expose the owner's suspension state in the public item DTO.
+    if ((data.hidden || ownerObj?.suspended) && !isPrivileged)
+      throw new ApiError("Item not found", 404);
+    // Never expose the owner's suspension state; keep the serial PRIVATE.
     if (ownerObj) delete ownerObj.suspended;
+    if (!isPrivileged) delete (data as { serial_number?: string }).serial_number;
 
     // Fire-and-forget view counter.
     admin

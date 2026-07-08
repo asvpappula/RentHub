@@ -138,20 +138,28 @@ export async function releaseOwnerPayout(
   if (paymentStatus === "refunded")
     return { released: false, reason: "payment_refunded" };
 
-  // Block on open dispute / claim / chargeback.
-  const [{ count: disputes }, { count: claims }, { data: rental }] = await Promise.all([
-    admin
-      .from("disputes")
-      .select("id", { count: "exact", head: true })
-      .eq("rental_id", rentalId)
-      .in("status", ["pending", "under_review", "appealed"]),
-    admin
-      .from("insurance_claims")
-      .select("id", { count: "exact", head: true })
-      .eq("rental_id", rentalId)
-      .in("status", ["pending", "under_review"]),
-    admin.from("rentals").select("status, item:items(title)").eq("id", rentalId).single(),
-  ]);
+  // Block on open dispute / claim / chargeback / handoff incident.
+  const [{ count: disputes }, { count: claims }, { count: incidents }, { data: rental }] =
+    await Promise.all([
+      admin
+        .from("disputes")
+        .select("id", { count: "exact", head: true })
+        .eq("rental_id", rentalId)
+        .in("status", ["pending", "under_review", "appealed"]),
+      admin
+        .from("insurance_claims")
+        .select("id", { count: "exact", head: true })
+        .eq("rental_id", rentalId)
+        .in("status", ["pending", "under_review"]),
+      admin
+        .from("incidents")
+        .select("id", { count: "exact", head: true })
+        .eq("rental_id", rentalId)
+        .in("status", ["open", "under_review", "awaiting_evidence"]),
+      admin.from("rentals").select("status, item:items(title)").eq("id", rentalId).single(),
+    ]);
+  if ((incidents ?? 0) > 0)
+    return { released: false, reason: "open_incident" };
   if ((disputes ?? 0) > 0 || (claims ?? 0) > 0)
     return { released: false, reason: "open_dispute_or_claim" };
   const rentalStatus = (rental as { status?: string } | null)?.status;

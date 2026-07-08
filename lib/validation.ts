@@ -35,6 +35,9 @@ export const createItemSchema = z.object({
   insurance_fee_percentage: z.number().min(0).max(9.99).default(5),
   gps_tracking_required: z.boolean().default(false),
   delivery_options: z.string().max(255).optional(),
+  // Phase 4: private serial/identifier + accessory checklist (both optional).
+  serial_number: z.string().max(120).optional(),
+  accessories: z.array(z.string().min(1).max(120)).max(30).optional(),
 });
 
 export const updateItemSchema = createItemSchema.partial().extend({
@@ -76,6 +79,60 @@ export const createDisputeSchema = z.object({
 
 export const paymentIntentSchema = z.object({
   rental_id: z.number().int().positive(),
+});
+
+// ===== Phase 4: pickup / return / incidents =====
+export const INCIDENT_TYPE_VALUES = [
+  "late_return",
+  "damage",
+  "missing_accessory",
+  "missing_item",
+  "theft_suspected",
+  "wrong_item_returned",
+  "other",
+] as const;
+
+const accessoryChecklist = z
+  .array(z.object({ name: z.string().min(1).max(120), present: z.boolean() }))
+  .max(30);
+
+export const confirmPickupSchema = z.object({
+  code: z.string().regex(/^\d{6}$/, "Enter the 6-digit pickup code"),
+  photos: z.array(evidencePath).max(8).optional(),
+  notes: z.string().max(2000).optional(),
+  accessories: accessoryChecklist.optional(),
+});
+
+export const submitReturnSchema = z.object({
+  photos: z.array(evidencePath).max(8).optional(),
+  notes: z.string().max(2000).optional(),
+  accessories: accessoryChecklist.optional(),
+});
+
+export const reviewReturnSchema = z.object({
+  action: z.enum(["accept", "report_issue"]),
+  // required when action = report_issue
+  incident_type: z.enum(INCIDENT_TYPE_VALUES).optional(),
+  description: z.string().max(5000).optional(),
+  evidence: z.array(evidencePath).max(8).optional(),
+});
+
+export const createIncidentSchema = z.object({
+  rental_id: z.number().int().positive(),
+  type: z.enum(INCIDENT_TYPE_VALUES),
+  description: z.string().min(10, "Describe the issue (10+ characters)").max(5000),
+  evidence: z.array(evidencePath).max(8).optional(),
+});
+
+export const adminIncidentActionSchema = z.object({
+  action: z.enum([
+    "under_review",
+    "request_evidence",
+    "resolve_owner",
+    "resolve_renter",
+    "close",
+  ]),
+  reason: z.string().max(2000).optional(),
 });
 
 export const rateRentalSchema = z.object({

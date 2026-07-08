@@ -21,7 +21,17 @@ export async function GET() {
       .order("created_at", { ascending: false });
     if (error) throw new ApiError(error.message, 500);
 
-    return NextResponse.json({ saved: data ?? [] });
+    // The saver is not the item's owner — keep the private serial out of the
+    // wishlist DTO (items(*) would otherwise include it).
+    const saved = (data ?? []).map((row) => {
+      const it = (row as { item?: unknown }).item;
+      const obj = Array.isArray(it) ? it[0] : it;
+      if (obj && typeof obj === "object")
+        delete (obj as Record<string, unknown>).serial_number;
+      return row;
+    });
+
+    return NextResponse.json({ saved });
   } catch (err) {
     return handleApiError(err);
   }

@@ -11,6 +11,8 @@ import {
   FiFlag,
   FiUserX,
   FiEyeOff,
+  FiAlertOctagon,
+  FiClock,
 } from "react-icons/fi";
 import Skeleton from "@/components/ui/Skeleton";
 
@@ -24,6 +26,8 @@ interface Summary {
   fraudFlags: number;
   suspendedUsers: number;
   hiddenListings: number;
+  openIncidents: number;
+  lateRentals: number;
 }
 
 const CARDS: {
@@ -33,6 +37,8 @@ const CARDS: {
   icon: React.ComponentType<{ className?: string }>;
   alert?: boolean;
 }[] = [
+  { key: "openIncidents", label: "Open incidents", href: "/admin/incidents", icon: FiAlertOctagon, alert: true },
+  { key: "lateRentals", label: "Late rentals", href: "/admin/incidents", icon: FiClock, alert: true },
   { key: "openDisputes", label: "Open disputes", href: "/admin/disputes", icon: FiAlertTriangle, alert: true },
   { key: "openClaims", label: "Open claims", href: "/admin/claims", icon: FiShield, alert: true },
   { key: "chargebacks", label: "Chargebacks", href: "/admin/payments", icon: FiCreditCard, alert: true },
@@ -58,7 +64,7 @@ export default function AdminDashboard() {
   if (loading) {
     return (
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        {Array.from({ length: 9 }).map((_, i) => (
+        {Array.from({ length: 11 }).map((_, i) => (
           <Skeleton key={i} className="h-24 rounded-2xl" />
         ))}
       </div>

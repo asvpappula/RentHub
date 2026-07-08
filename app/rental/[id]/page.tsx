@@ -26,6 +26,7 @@ import Skeleton from "@/components/ui/Skeleton";
 import Modal from "@/components/ui/Modal";
 import RatingStars from "@/components/RatingStars";
 import PriceBreakdown from "@/components/PriceBreakdown";
+import HandoffPanel from "@/components/HandoffPanel";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 
 export default function RentalDetailPage({
@@ -47,7 +48,6 @@ export default function RentalDetailPage({
   const [claimText, setClaimText] = useState("");
   const [claimValue, setClaimValue] = useState("");
   const [claimFiles, setClaimFiles] = useState<File[]>([]);
-  const [completeOpen, setCompleteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [myRating, setMyRating] = useState(0);
 
@@ -96,36 +96,6 @@ export default function RentalDetailPage({
       refetch();
     } catch (err) {
       toast("error", err instanceof Error ? err.message : "Action failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const completeRental = () =>
-    act(
-      () => fetch(`/api/rentals/${rental.id}/complete`, { method: "POST" }),
-      "Rental marked complete."
-    );
-
-  /** Owner path: one backend command completes AND releases the deposit. */
-  const completeAndRelease = async () => {
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/rentals/${rental.id}/complete?release=1`, {
-        method: "POST",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Completion failed");
-      toast(
-        "success",
-        rental.deposit_status === "held"
-          ? "Rental completed — deposit released to the renter."
-          : "Rental completed."
-      );
-      setCompleteOpen(false);
-      refetch();
-    } catch (err) {
-      toast("error", err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setBusy(false);
     }
@@ -300,6 +270,16 @@ export default function RentalDetailPage({
             </div>
           </div>
 
+          {/* Handoff (pickup / return / incidents) */}
+          {["confirmed", "active", "completed", "disputed"].includes(rental.status) && (
+            <HandoffPanel
+              rental={rental}
+              isOwner={isOwner}
+              isRenter={isRenter}
+              onDone={refetch}
+            />
+          )}
+
           {/* Timeline */}
           <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
@@ -315,6 +295,18 @@ export default function RentalDetailPage({
                 {
                   label: "Paid & confirmed",
                   done: ["confirmed", "active", "completed", "disputed"].includes(rental.status),
+                },
+                {
+                  label: "Picked up",
+                  done:
+                    rental.pickup_confirmed_at != null ||
+                    ["active", "completed"].includes(rental.status),
+                },
+                {
+                  label: "Returned & reviewed",
+                  done:
+                    rental.return_status === "accepted" ||
+                    rental.status === "completed",
                 },
                 {
                   label: "Completed",
@@ -412,17 +404,6 @@ export default function RentalDetailPage({
               >
                 <FiCreditCard className="h-4 w-4" />
                 Pay & confirm
-              </Button>
-            )}
-
-            {["confirmed", "active"].includes(rental.status) && (
-              <Button
-                className="w-full"
-                loading={busy && !completeOpen}
-                onClick={() => (isOwner ? setCompleteOpen(true) : completeRental())}
-              >
-                <FiCheckCircle className="h-4 w-4" />
-                Complete rental
               </Button>
             )}
 
@@ -618,42 +599,6 @@ export default function RentalDetailPage({
             </div>
           </div>
         </div>
-      </Modal>
-
-      {/* Owner completion modal */}
-      <Modal
-        open={completeOpen}
-        onClose={() => setCompleteOpen(false)}
-        title="Complete this rental?"
-        size="sm"
-      >
-        <p className="text-sm text-slate-500">
-          Was &ldquo;{rental.item?.title}&rdquo; returned in good condition?
-        </p>
-        <div className="mt-5 space-y-2.5">
-          <Button className="w-full" loading={busy} onClick={completeAndRelease}>
-            <FiCheckCircle className="h-4 w-4" />
-            {rental.deposit_status === "held"
-              ? `Yes — complete & release ${formatMoney(rental.deposit_amount)} deposit`
-              : "Yes — complete rental"}
-          </Button>
-          <Button
-            variant="outline"
-            className="w-full"
-            disabled={busy}
-            onClick={() => {
-              setCompleteOpen(false);
-              setDisputeOpen("damage");
-            }}
-          >
-            <FiAlertTriangle className="h-4 w-4 text-amber-500" />
-            No — report damage
-          </Button>
-        </div>
-        <p className="mt-3 text-xs text-slate-400">
-          Reporting damage opens a dispute; the deposit stays held until it&apos;s
-          resolved.
-        </p>
       </Modal>
 
       {/* Dispute modal */}

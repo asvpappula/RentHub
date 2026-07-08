@@ -77,8 +77,15 @@ export async function GET(request: Request) {
     }
     if (error) throw new ApiError(error.message, 500);
 
+    // Never expose the private serial/identifier in the public browse list.
+    const items = (data ?? []).map((it) => {
+      const copy = { ...(it as Record<string, unknown>) };
+      delete copy.serial_number;
+      return copy;
+    });
+
     return NextResponse.json({
-      items: data ?? [],
+      items,
       total: count ?? 0,
       page,
       pageSize,

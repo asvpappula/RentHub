@@ -45,6 +45,9 @@ CREATE TABLE items (
   rental_count INT DEFAULT 0,
   average_rating DECIMAL(3,2),
   hidden BOOLEAN DEFAULT FALSE,
+  -- Phase 4: PRIVATE serial/identifier (never in public DTOs) + accessory list.
+  serial_number VARCHAR(120),
+  accessories TEXT[] DEFAULT '{}',
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -76,6 +79,20 @@ CREATE TABLE rentals (
   agreement_accepted_at TIMESTAMP,
   renter_rating INT,
   owner_rating INT,
+  -- Phase 4: pickup/return handoff + private evidence (object paths, signed on read).
+  pickup_code VARCHAR(12),
+  pickup_confirmed_at TIMESTAMPTZ,
+  pickup_confirmed_by BIGINT REFERENCES users(id),
+  pickup_photos TEXT[] DEFAULT '{}',
+  pickup_notes TEXT,
+  pickup_accessories JSONB DEFAULT '[]',
+  return_submitted_at TIMESTAMPTZ,
+  return_submitted_by BIGINT REFERENCES users(id),
+  return_photos TEXT[] DEFAULT '{}',
+  return_notes TEXT,
+  return_reviewed_at TIMESTAMPTZ,
+  return_reviewed_by BIGINT REFERENCES users(id),
+  return_status VARCHAR(20) DEFAULT 'none',
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -229,6 +246,37 @@ CREATE TABLE email_events (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- ===== Phase 4: pickup/return handoff audit + incidents =====
+-- Immutable transition audit for every rental state change (service-role only).
+CREATE TABLE booking_state_events (
+  id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  rental_id BIGINT NOT NULL REFERENCES rentals(id),
+  event_type VARCHAR(50) NOT NULL,
+  from_status VARCHAR(50),
+  to_status VARCHAR(50),
+  actor_user_id BIGINT REFERENCES users(id),
+  actor_role VARCHAR(20),
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Structured handoff problems; an open incident blocks payout/deposit release.
+CREATE TABLE incidents (
+  id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  rental_id BIGINT NOT NULL REFERENCES rentals(id),
+  opened_by BIGINT NOT NULL REFERENCES users(id),
+  against_user_id BIGINT REFERENCES users(id),
+  type VARCHAR(30) NOT NULL,
+  status VARCHAR(30) DEFAULT 'open',
+  description TEXT NOT NULL,
+  evidence TEXT[] DEFAULT '{}',
+  resolution_notes TEXT,
+  resolved_by BIGINT REFERENCES users(id),
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- Service-role only (RLS enabled with no policies).
 CREATE TABLE phone_verification_codes (
   id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
@@ -268,6 +316,9 @@ CREATE INDEX idx_rentals_item ON rentals(item_id);
 CREATE INDEX idx_messages_sender ON messages(sender_id);
 CREATE INDEX idx_messages_recipient ON messages(recipient_id);
 CREATE INDEX idx_notifications_user ON notifications(user_id);
+CREATE INDEX idx_booking_events_rental ON booking_state_events(rental_id);
+CREATE INDEX idx_incidents_rental ON incidents(rental_id);
+CREATE INDEX idx_incidents_status ON incidents(status);
 
 -- Auto-create a profile row whenever a Supabase Auth user signs up.
 CREATE OR REPLACE FUNCTION public.handle_new_auth_user()
@@ -305,6 +356,8 @@ CREATE TRIGGER users_touch BEFORE UPDATE ON users
 CREATE TRIGGER items_touch BEFORE UPDATE ON items
   FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
 CREATE TRIGGER rentals_touch BEFORE UPDATE ON rentals
+  FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+CREATE TRIGGER incidents_touch BEFORE UPDATE ON incidents
   FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
 
 -- Enable realtime for live messaging / notifications / rental updates.
